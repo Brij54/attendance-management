@@ -15,7 +15,7 @@
 5. Clicks Generate Updated Excel.
 6. Backend matches Employee Code + date.
 7. Earliest swipe on each employee/date is written into a new Punchin Time column immediately after that date.
-8. If no swipe exists, the new cell remains blank.
+8. If no swipe exists, the new cell is highlighted in the punch-in time column (indicating absence).
 9. Updated workbook is downloaded.
 10. Temporary uploaded/decrypted files are deleted after the response.
 

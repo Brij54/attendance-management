@@ -77,3 +77,14 @@ def decode_token(token: str):
     if not payload.get("sub"):
         raise ValueError("Invalid token")
     return payload
+
+ALLOWED_MANUAL_PUNCHIN_ROLES = {"coordinator", "dean-faculty"}
+
+def is_authorized_for_manual_punchin(role: str) -> bool:
+    """Check whether a user role is permitted to perform manual punch-in.
+    Permitted roles: 'coordinator' and 'dean-faculty' (case-insensitive, supporting 'dean_faculty').
+    """
+    if not role:
+        return False
+    clean_role = role.strip().lower().replace("_", "-")
+    return clean_role in ALLOWED_MANUAL_PUNCHIN_ROLES

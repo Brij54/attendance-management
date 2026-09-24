@@ -5,6 +5,7 @@ from pathlib import Path
 from datetime import datetime, date
 from dotenv import load_dotenv
 import streamlit as st
+import streamlit.components.v1 as components
 from openpyxl import load_workbook
 import plotly.express as px
 import plotly.graph_objects as go
@@ -13,10 +14,15 @@ import plotly.graph_objects as go
 ASSETS_DIR = Path(__file__).resolve().parent / "assets"
 ASSETS_DIR.mkdir(parents=True, exist_ok=True)
 
+_ASSET_CACHE = {}
+
 def get_asset_base64(filename):
     """Retrieve an asset file (logo, background) as Base64 data URL if present.
-    Searches multiple candidate directories to handle different Streamlit launch paths.
+    Caches result in-memory to prevent expensive disk I/O on every Streamlit rerun.
     """
+    if filename in _ASSET_CACHE:
+        return _ASSET_CACHE[filename]
+
     stem = Path(filename).stem
     names_to_try = [filename, f"{stem}.png", f"{stem}.jpg", f"{stem}.jpeg", f"{stem}.svg"]
     
@@ -40,22 +46,26 @@ def get_asset_base64(filename):
                         else "image/png" if ext == "png"
                         else "image/jpeg"
                     )
-                    return f"data:{mime};base64,{base64.b64encode(data).decode()}"
+                    res = f"data:{mime};base64,{base64.b64encode(data).decode()}"
+                    _ASSET_CACHE[filename] = res
+                    return res
                 except Exception:
                     pass
     return None
 
 
 # Load environment variables
+load_dotenv(Path(__file__).resolve().parents[1] / ".env.production")
+load_dotenv(Path(__file__).resolve().parent / ".env.production")
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 load_dotenv(Path(__file__).resolve().parent / ".env")
 load_dotenv()
 
 st.set_page_config(
-    page_title="Attendance Report PORTAL - Login",
-    page_icon="⏱️",
+    page_title="IIIT-B Attendance Portal",
+    page_icon=str(ASSETS_DIR / "IIITB_logo1.png") if (ASSETS_DIR / "IIITB_logo1.png").exists() else None,
     layout="wide",
-    initial_sidebar_state="collapsed"
+    initial_sidebar_state="expanded"
 )
 
 API = os.getenv("API_URL", "http://localhost:8000").rstrip("/")
@@ -80,6 +90,8 @@ if "available_reports" not in st.session_state:
     st.session_state.available_reports = None
 if "selected_report_uuid" not in st.session_state:
     st.session_state.selected_report_uuid = None
+if "sidebar_open" not in st.session_state:
+    st.session_state.sidebar_open = True
 
 
 
@@ -97,15 +109,14 @@ def inject_custom_css(login_page=False):
         /* ============================================================
            LOGIN PAGE FULL VIEWPORT (ZERO MARGINS, ZERO BLACK SPACE)
            ============================================================ */
-        header,
         header[data-testid="stHeader"],
-        [data-testid="stHeader"],
         .stAppHeader,
         .stAppDeployButton,
         div[data-testid="stToolbar"],
         #MainMenu,
         [data-testid="stDecoration"],
-        footer {
+        footer,
+        [data-testid="stSidebar"] {
             display: none !important;
             visibility: hidden !important;
             height: 0 !important;
@@ -497,147 +508,554 @@ def inject_custom_css(login_page=False):
         </style>
         """), unsafe_allow_html=True)
     else:
-        st.markdown(clean_html("""
+        sidebar_is_open = st.session_state.get("sidebar_open", True)
+        sidebar_css = """
+        [data-testid="stSidebar"],
+        section[data-testid="stSidebar"] {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            transform: none !important;
+            margin-left: 0 !important;
+            width: 250px !important;
+            min-width: 250px !important;
+            max-width: 250px !important;
+            background: #ffffff !important;
+            border-right: 1px solid #e2e8f0 !important;
+            box-shadow: 3px 0 12px rgba(0, 0, 0, 0.05) !important;
+            padding-top: 0 !important;
+            margin-top: 0 !important;
+            transition: width 0.15s ease-out, min-width 0.15s ease-out, max-width 0.15s ease-out !important;
+        }
+
+        [data-testid="stSidebar"] .block-container {
+            padding: 0.35rem 0.85rem 1.25rem 0.85rem !important;
+        }
+
+        [data-testid="stSidebar"] .stButton > button {
+            height: 44px !important;
+            text-align: left !important;
+            justify-content: flex-start !important;
+            padding: 0 1rem !important;
+            font-size: 0.92rem !important;
+            font-weight: 600 !important;
+            border-radius: 8px !important;
+            margin-bottom: 0.35rem !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 0.65rem !important;
+            width: 100% !important;
+        }
+        """ if sidebar_is_open else """
+        [data-testid="stSidebar"],
+        section[data-testid="stSidebar"] {
+            display: block !important;
+            visibility: visible !important;
+            opacity: 1 !important;
+            transform: none !important;
+            margin-left: 0 !important;
+            width: 68px !important;
+            min-width: 68px !important;
+            max-width: 68px !important;
+            background: #ffffff !important;
+            border-right: 1px solid #e2e8f0 !important;
+            box-shadow: 2px 0 8px rgba(0, 0, 0, 0.04) !important;
+            overflow: hidden !important;
+            padding-top: 0 !important;
+            margin-top: 0 !important;
+            transition: width 0.15s ease-out, min-width 0.15s ease-out, max-width 0.15s ease-out !important;
+        }
+
+        [data-testid="stSidebar"] .block-container {
+            padding: 0.35rem 0.25rem 1.25rem 0.25rem !important;
+        }
+
+        [data-testid="stSidebar"] .stButton > button {
+            width: 46px !important;
+            min-width: 46px !important;
+            max-width: 46px !important;
+            height: 46px !important;
+            padding: 0 !important;
+            margin: 0.25rem auto !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            font-size: 1.25rem !important;
+            border-radius: 8px !important;
+        }
+        """
+
+        st.markdown(clean_html(f"""
         <style>
-        header,
+        /* Clean top: hide Streamlit's native header toolbar, deploy button, native sidebar header, and collapse chevrons */
         header[data-testid="stHeader"],
-        [data-testid="stHeader"],
         .stAppHeader,
         .stAppDeployButton,
         div[data-testid="stToolbar"],
         #MainMenu,
         [data-testid="stDecoration"],
-        footer {
-            display: none ;
-            visibility: hidden ;
-            height: 0 ;
-            width: 0 ;
-        }
+        footer,
+        [data-testid="stSidebarHeader"],
+        header[data-testid="stSidebarHeader"],
+        div[data-testid="stSidebarHeader"],
+        [data-testid="stSidebarCollapseButton"],
+        [data-testid="stSidebarCollapsedControl"],
+        [data-testid="collapsedControl"],
+        [data-testid="stHeaderActionElements"],
+        [data-testid="stHeadingWithActionElements"] a,
+        a.anchorjs-link,
+        a.anchor-link {{
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            max-height: 0 !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+            overflow: hidden !important;
+        }}
 
-        * {
+        /* Completely remove all top whitespace in sidebar containers */
+        [data-testid="stSidebarUserContent"],
+        [data-testid="stSidebarContent"],
+        section[data-testid="stSidebar"] > div:first-child,
+        [data-testid="stSidebar"] > div:first-child {{
+            padding-top: 0 !important;
+            margin-top: 0 !important;
+        }}
+
+        [data-testid="stSidebar"] div[data-testid="stVerticalBlock"]:first-child,
+        [data-testid="stSidebar"] div[data-testid="stVerticalBlock"] > div:first-child,
+        [data-testid="stSidebar"] [data-testid="stHorizontalBlock"]:first-child {{
+            padding-top: 0 !important;
+            margin-top: 0 !important;
+        }}
+
+        * {{
             box-sizing: border-box;
-        }
+        }}
 
-        .stApp {
-            background-color: #0b1329;
-            color: #f1f5f9;
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-        }
+        html, body {{
+            overflow-x: hidden !important;
+            background-color: #f4f6f9 !important;
+        }}
 
-        .block-container {
-            padding: 1.5rem 2rem ;
-            max-width: 100% ;
-        }
+        .stApp {{
+            background-color: #f4f6f9 !important;
+            color: #1e293b !important;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif !important;
+        }}
 
-        .nav-container {
+        /* Dynamic Sidebar Styling based on session state */
+        {sidebar_css}
+
+        [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {{
+            gap: 0.2rem !important;
+        }}
+
+        /* Sidebar Navigation Buttons - Matching User's Screenshot */
+        [data-testid="stSidebar"] .stButton > button {{
+            height: 48px !important;
+            text-align: left !important;
+            justify-content: flex-start !important;
+            padding: 0 1.1rem !important;
+            font-size: 0.95rem !important;
+            border-radius: 10px !important;
+            margin-bottom: 0.35rem !important;
+            display: flex !important;
+            align-items: center !important;
+            gap: 0.85rem !important;
+            width: 100% !important;
+            border: none !important;
+            transition: all 0.15s ease-in-out !important;
+        }}
+
+        /* Active Nav Item: Light gray pill container with bold black text */
+        [data-testid="stSidebar"] .stButton > button[kind="primary"] {{
+            background: #f1f3f5 !important;
+            background-color: #f1f3f5 !important;
+            color: #000000 !important;
+            font-weight: 700 !important;
+            border: none !important;
+            box-shadow: none !important;
+        }}
+
+        [data-testid="stSidebar"] .stButton > button[kind="primary"]:hover {{
+            background: #e9ecef !important;
+            background-color: #e9ecef !important;
+            color: #000000 !important;
+        }}
+
+        /* Inactive Nav Items: Transparent background with dark slate text */
+        [data-testid="stSidebar"] .stButton > button[kind="secondary"] {{
+            background: transparent !important;
+            background-color: transparent !important;
+            border: none !important;
+            color: #1e293b !important;
+            font-weight: 500 !important;
+            box-shadow: none !important;
+        }}
+
+        [data-testid="stSidebar"] .stButton > button[kind="secondary"]:hover {{
+            background: #f8fafc !important;
+            background-color: #f8fafc !important;
+            color: #000000 !important;
+        }}
+
+        /* Sidebar Header Hamburger Toggle Button */
+        [data-testid="stSidebar"] [data-testid="stColumn"]:first-child .stButton > button {{
+            width: 44px !important;
+            min-width: 44px !important;
+            max-width: 44px !important;
+            height: 44px !important;
+            padding: 0 !important;
+            font-size: 1.35rem !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            background: transparent !important;
+            border: none !important;
+            color: #1e293b !important;
+            border-radius: 8px !important;
+        }}
+
+        [data-testid="stSidebar"] [data-testid="stColumn"]:first-child .stButton > button:hover {{
+            background: #f1f5f9 !important;
+            color: #000000 !important;
+        }}
+
+        [data-testid="stAppViewContainer"] {{
+            display: flex !important;
+            flex-direction: row !important;
+            overflow-x: hidden !important;
+        }}
+
+        [data-testid="stAppViewContainer"] > section.main {{
+            flex: 1 1 auto !important;
+            width: 100% !important;
+            min-width: 0 !important;
+        }}
+
+        section.main .block-container,
+        [data-testid="stMainBlockContainer"],
+        [data-testid="stAppViewContainer"] > section.main {{
+            padding-top: 0.85rem !important;
+            padding-bottom: 2.5rem !important;
+            padding-left: 1.5rem !important;
+            padding-right: 1.5rem !important;
+            max-width: 100% !important;
+            margin: 0 auto !important;
+            height: auto !important;
+            overflow: visible !important;
+            background: #f4f6f9 !important;
+        }}
+
+        /* Top Teal App Bar matching reference screenshot */
+        .top-teal-bar {{
+            background: #009bbd;
+            background: linear-gradient(90deg, #009bbd 0%, #00a8cc 100%);
+            height: 56px;
+            border-radius: 8px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            background: rgba(15, 23, 42, 0.9);
-            backdrop-filter: blur(14px);
-            border: 1px solid rgba(0, 180, 216, 0.2);
-            padding: 0.75rem 1.5rem;
-            border-radius: 14px;
-            margin-bottom: 1.5rem;
-            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
-        }
+            padding: 0 1.25rem;
+            margin-bottom: 0.4rem;
+            box-shadow: 0 2px 8px rgba(0, 155, 189, 0.2);
+        }}
 
-        .glass-card {
-            background: rgba(15, 23, 42, 0.75);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(0, 180, 216, 0.15);
-            border-radius: 16px;
-            padding: 1.5rem;
-            margin-bottom: 1.25rem;
-            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.35);
-            transition: transform 0.2s ease, border-color 0.2s ease;
-        }
+        .top-teal-title {{
+            font-size: 1.35rem;
+            font-weight: 700;
+            color: #ffffff;
+            letter-spacing: -0.01em;
+        }}
 
-        .glass-card:hover {
-            border-color: rgba(0, 180, 216, 0.5);
-        }
+        .top-teal-right {{
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+        }}
 
-        .stat-box {
-            background: linear-gradient(
-                145deg,
-                rgba(15, 23, 42, 0.95),
-                rgba(11, 19, 41, 0.95)
-            );
-            border: 1px solid rgba(0, 180, 216, 0.25);
-            border-radius: 14px;
-            padding: 1.25rem;
-            text-align: center;
-            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.25);
-        }
+        .user-name-label {{
+            color: #ffffff;
+            font-size: 0.9rem;
+            font-weight: 600;
+            text-transform: capitalize;
+            letter-spacing: 0.02em;
+        }}
 
-        .stat-val {
-            font-size: 1.8rem;
-            font-weight: 800;
-            color: #38bdf8;
-        }
+        .user-avatar-badge {{
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #f43f5e;
+            color: #ffffff;
+            font-weight: 700;
+            font-size: 1rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 2px 6px rgba(244, 63, 94, 0.35);
+        }}
 
-        .stat-label {
-            font-size: 0.85rem;
-            color: #94a3b8;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            margin-top: 0.25rem;
-        }
+        .top-teal-logout-btn {{
+            background: rgba(255, 255, 255, 0.18) !important;
+            color: #ffffff !important;
+            border: 1px solid rgba(255, 255, 255, 0.45) !important;
+            border-radius: 7px !important;
+            padding: 6px 14px !important;
+            font-size: 0.85rem !important;
+            font-weight: 600 !important;
+            text-decoration: none !important;
+            display: inline-flex !important;
+            align-items: center !important;
+            gap: 6px !important;
+            transition: all 0.2s ease !important;
+            cursor: pointer !important;
+        }}
 
-        .stButton > button {
-            border-radius: 10px ;
-            font-weight: 600 ;
-            transition: all 0.2s ease-in-out ;
-        }
+        .top-teal-logout-btn:hover {{
+            background: rgba(255, 255, 255, 0.3) !important;
+            border-color: #ffffff !important;
+            color: #ffffff !important;
+            text-decoration: none !important;
+            transform: translateY(-1px) !important;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15) !important;
+        }}
 
-        .stButton > button[kind="primary"] {
-            background: linear-gradient(135deg, #00b4d8 0%, #0077b6 100%) ;
-            border: none ;
-            color: #ffffff ;
-            box-shadow: 0 4px 14px rgba(0, 119, 182, 0.4) ;
-        }
+        /* Clean Enterprise Light Cards */
+        .glass-card {{
+            background: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 10px !important;
+            padding: 1.25rem !important;
+            margin-bottom: 1.25rem !important;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+            color: #1e293b !important;
+        }}
 
-        .stButton > button[kind="primary"]:hover {
-            background: linear-gradient(135deg, #0096c7 0%, #005f8a 100%) ;
-            transform: translateY(-1px);
-            box-shadow: 0 6px 18px rgba(0, 119, 182, 0.5) ;
-        }
+        .glass-card:hover {{
+            border-color: #cbd5e1 !important;
+        }}
 
-        .stButton > button[kind="secondary"] {
-            background: rgba(255, 255, 255, 0.06) ;
-            border: 1px solid rgba(255, 255, 255, 0.15) ;
-            color: #cbd5e1 ;
-        }
+        /* Clean Enterprise Light Stat Box */
+        .stat-box {{
+            background: #ffffff !important;
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 10px !important;
+            padding: 1.25rem !important;
+            text-align: center !important;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04) !important;
+        }}
 
-        .stButton > button[kind="secondary"]:hover {
-            border-color: rgba(0, 180, 216, 0.5) ;
-            color: #38bdf8 ;
-        }
+        .stat-val {{
+            font-size: 1.85rem !important;
+            font-weight: 700 !important;
+            color: #009bbd !important;
+        }}
 
-        div[data-baseweb="input"] {
-            background-color: rgba(15, 23, 42, 0.6) ;
-            border: 1px solid rgba(255, 255, 255, 0.15) ;
-            border-radius: 8px ;
-            color: #ffffff ;
-        }
+        .stat-label {{
+            font-size: 0.82rem !important;
+            color: #64748b !important;
+            text-transform: uppercase !important;
+            letter-spacing: 0.05em !important;
+            margin-top: 0.25rem !important;
+            font-weight: 600 !important;
+        }}
 
-        div[data-baseweb="input"]:focus-within {
-            border-color: #0077b6 ;
-            box-shadow: 0 0 0 3px rgba(0, 119, 182, 0.25) ;
-        }
+        .stButton > button {{
+            border-radius: 8px !important;
+            font-weight: 600 !important;
+            transition: all 0.2s ease-in-out !important;
+        }}
 
-        .user-badge {
+        .stButton > button[kind="primary"] {{
+            background: #009bbd !important;
+            border: none !important;
+            color: #ffffff !important;
+            box-shadow: 0 2px 6px rgba(0, 155, 189, 0.3) !important;
+        }}
+
+        .stButton > button[kind="primary"]:hover {{
+            background: #0087a4 !important;
+            box-shadow: 0 4px 10px rgba(0, 155, 189, 0.4) !important;
+        }}
+
+        .stButton > button[kind="secondary"] {{
+            background: #ffffff !important;
+            border: 1px solid #cbd5e1 !important;
+            color: #334155 !important;
+        }}
+
+        .stButton > button[kind="secondary"]:hover {{
+            background: #f1f5f9 !important;
+            border-color: #94a3b8 !important;
+            color: #0f172a !important;
+        }}
+
+        div[data-baseweb="input"] {{
+            background-color: #ffffff !important;
+            border: 1.5px solid #cbd5e1 !important;
+            border-radius: 8px !important;
+            color: #0f172a !important;
+        }}
+
+        div[data-baseweb="input"]:focus-within {{
+            border-color: #009bbd !important;
+            box-shadow: 0 0 0 3px rgba(0, 155, 189, 0.2) !important;
+        }}
+
+        div[data-baseweb="input"] input {{
+            color: #0f172a !important;
+        }}
+
+        /* BaseWeb Select Box - Crisp Light Enterprise Theme */
+        div[data-baseweb="select"] {{
+            background-color: #ffffff !important;
+            border-radius: 8px !important;
+        }}
+
+        div[data-baseweb="select"] > div {{
+            background-color: #ffffff !important;
+            border: 1.5px solid #cbd5e1 !important;
+            border-radius: 8px !important;
+            color: #0f172a !important;
+            min-height: 42px !important;
+        }}
+
+        div[data-baseweb="select"] > div:hover {{
+            border-color: #94a3b8 !important;
+        }}
+
+        div[data-baseweb="select"]:focus-within > div {{
+            border-color: #009bbd !important;
+            box-shadow: 0 0 0 3px rgba(0, 155, 189, 0.2) !important;
+        }}
+
+        div[data-baseweb="select"] div[role="combobox"] {{
+            color: #0f172a !important;
+            font-weight: 500 !important;
+            background-color: #ffffff !important;
+        }}
+
+        div[data-baseweb="select"] span {{
+            color: #0f172a !important;
+            font-weight: 500 !important;
+        }}
+
+        div[data-baseweb="select"] svg {{
+            fill: #475569 !important;
+            color: #475569 !important;
+        }}
+
+        /* BaseWeb Select Dropdown Popover & Menu Items */
+        div[data-baseweb="popover"],
+        div[data-baseweb="popover"] > div,
+        ul[data-baseweb="menu"],
+        li[data-baseweb="menu-item"] {{
+            background-color: #ffffff !important;
+            color: #0f172a !important;
+        }}
+
+        li[data-baseweb="menu-item"]:hover,
+        li[data-baseweb="menu-item"][aria-selected="true"] {{
+            background-color: #f1f5f9 !important;
+            color: #009bbd !important;
+        }}
+
+        /* Inline Code & Badges: soft light blue, never terminal green */
+        code {{
+            background-color: #f0f9ff !important;
+            color: #0284c7 !important;
+            border: 1px solid #bae6fd !important;
+            border-radius: 6px !important;
+            padding: 0.18rem 0.5rem !important;
+            font-weight: 600 !important;
+            font-size: 0.9rem !important;
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace !important;
+        }}
+
+        .cycle-badge {{
+            display: inline-flex;
+            align-items: center;
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 6px;
+            padding: 0.35rem 0.85rem;
+            font-size: 0.92rem;
+            font-weight: 600;
+            color: #0284c7;
+            letter-spacing: 0.01em;
+        }}
+
+        [data-testid="stDataFrame"],
+        [data-testid="stTable"] {{
+            border: 1px solid #e2e8f0 !important;
+            border-radius: 8px !important;
+            background: #ffffff !important;
+        }}
+
+        /* Streamlit Alerts */
+        div[data-testid="stAlert"] {{
+            border-radius: 8px !important;
+            border: 1px solid #e2e8f0 !important;
+            background-color: #ffffff !important;
+        }}
+
+        /* Completely remove links, anchor icons, and pointer cursor from all headings */
+        [data-testid="stHeaderActionElements"],
+        [data-testid="stHeadingWithActionElements"] [data-testid="stHeaderActionElements"],
+        [data-testid="stHeadingWithActionElements"] a,
+        h1 a, h2 a, h3 a, h4 a, h5 a, h6 a,
+        .stHeadingWithActionElements a,
+        a.anchorjs-link,
+        a.anchor-link {{
+            display: none !important;
+            visibility: hidden !important;
+            pointer-events: none !important;
+            opacity: 0 !important;
+            width: 0 !important;
+            height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }}
+
+        h1, h2, h3, h4, h5, h6,
+        [data-testid="stHeadingWithActionElements"],
+        [data-testid="stHeadingWithActionElements"] > * {{
+            color: #0f172a !important;
+            font-weight: 700 !important;
+            cursor: default !important;
+            user-select: text !important;
+        }}
+
+        [data-testid="stHeadingWithActionElements"]:hover [data-testid="stHeaderActionElements"],
+        h1:hover a, h2:hover a, h3:hover a, h4:hover a, h5:hover a, h6:hover a {{
+            display: none !important;
+            visibility: hidden !important;
+            opacity: 0 !important;
+            pointer-events: none !important;
+        }}
+
+        p, span, label {{
+            color: #334155 !important;
+        }}
+
+        .user-badge {{
             display: inline-flex;
             align-items: center;
             gap: 0.35rem;
-            padding: 0.4rem 0.85rem;
-            background: rgba(0, 180, 216, 0.15);
-            border: 1px solid rgba(0, 180, 216, 0.3);
-            border-radius: 8px;
-            font-size: 0.88rem;
+            padding: 0.35rem 0.75rem;
+            background: #f0f9ff;
+            border: 1px solid #bae6fd;
+            border-radius: 6px;
+            font-size: 0.85rem;
             font-weight: 600;
-            color: #38bdf8;
-        }
+            color: #009bbd;
+        }}
         </style>
         """), unsafe_allow_html=True)
 
@@ -984,6 +1402,157 @@ def fetch_report_detail(job_uuid: str, token: str):
     return None
 
 
+def download_report_excel_api(token: str, job_uuid: str):
+    """Download the generated Excel file bytes for a report."""
+    try:
+        r = requests.get(
+            f"{API}/reports/{job_uuid}/download",
+            headers={"Authorization": f"Bearer {token}"},
+            timeout=45
+        )
+        if r.ok:
+            return r.content
+    except Exception:
+        pass
+    return None
+
+
+def fetch_dashboard_analytics_api(token: str, financial_year: str = None, month: str = None, job_uuid: str = None):
+    """Fetch aggregated dashboard analytics filtered by financial year and month from backend API."""
+    try:
+        params = {}
+        if financial_year and financial_year != "All Financial Years":
+            params["financial_year"] = financial_year
+        if month and month != "All Months (Full FY)":
+            params["month"] = month
+        if job_uuid and job_uuid != "All Batches":
+            params["job_uuid"] = job_uuid
+        r = requests.get(
+            f"{API}/analytics/dashboard",
+            headers={"Authorization": f"Bearer {token}"},
+            params=params,
+            timeout=25
+        )
+        if r.ok:
+            return r.json()
+    except Exception:
+        pass
+    return None
+
+
+def fetch_employees(token: str, search: str = None):
+    """Fetch registered employees from the backend API."""
+    try:
+        params = {}
+        if search:
+            params["search"] = search
+        r = requests.get(f"{API}/employees", headers={"Authorization": f"Bearer {token}"}, params=params, timeout=10)
+        if r.ok:
+            return r.json()
+        if r.status_code != 200:
+            err_msg = r.json().get("detail", r.text) if r.headers.get("content-type", "").startswith("application/json") else r.text
+            st.error(f"Failed to load employees: {err_msg}")
+    except Exception as e:
+        st.error(f"Error connecting to backend: {e}")
+    return []
+
+
+def create_employee_api(token: str, employee_code: str, employee_name: str, area: str = None, attendance_mode: str = None):
+    """Register a new employee."""
+    try:
+        payload = {
+            "employee_code": employee_code,
+            "employee_name": employee_name,
+            "area": area if area else None,
+            "attendance_mode": attendance_mode if attendance_mode else None
+        }
+        r = requests.post(f"{API}/employees", headers={"Authorization": f"Bearer {token}"}, json=payload, timeout=10)
+        if r.status_code == 201:
+            return True, r.json()
+        detail = r.json().get("detail", f"Error {r.status_code}") if r.headers.get("content-type", "").startswith("application/json") else r.text
+        return False, detail
+    except requests.RequestException as e:
+        return False, f"Network error: {e}"
+
+
+def update_employee_api(token: str, employee_id: int, employee_code: str = None, employee_name: str = None, area: str = None, attendance_mode: str = None, is_active: bool = None):
+    """Update existing employee details."""
+    try:
+        payload = {}
+        if employee_code is not None:
+            payload["employee_code"] = employee_code
+        if employee_name is not None:
+            payload["employee_name"] = employee_name
+        if area is not None:
+            payload["area"] = area
+        if attendance_mode is not None:
+            payload["attendance_mode"] = attendance_mode
+        if is_active is not None:
+            payload["is_active"] = is_active
+        r = requests.put(f"{API}/employees/{employee_id}", headers={"Authorization": f"Bearer {token}"}, json=payload, timeout=10)
+        if r.status_code == 200:
+            return True, r.json()
+        detail = r.json().get("detail", f"Error {r.status_code}") if r.headers.get("content-type", "").startswith("application/json") else r.text
+        return False, detail
+    except requests.RequestException as e:
+        return False, f"Network error: {e}"
+
+
+def toggle_employee_status_api(token: str, employee_id: int):
+    """Toggle employee between Active and Disabled status."""
+    try:
+        r = requests.post(f"{API}/employees/{employee_id}/toggle-status", headers={"Authorization": f"Bearer {token}"}, timeout=10)
+        if r.status_code == 200:
+            return True, r.json().get("message", "Status updated successfully.")
+        detail = r.json().get("detail", f"Error {r.status_code}") if r.headers.get("content-type", "").startswith("application/json") else r.text
+        return False, detail
+    except requests.RequestException as e:
+        return False, f"Network error: {e}"
+
+
+def delete_employee_api(token: str, employee_id: int):
+    """Disable an employee record by ID."""
+    return toggle_employee_status_api(token, employee_id)
+
+
+def manual_punch_in_api(token: str, employee_code: str, punch_date, punch_time: str):
+    """Submit manual punch-in to the backend API."""
+    try:
+        payload = {
+            "employeeCode": employee_code,
+            "date": str(punch_date),
+            "punchInTime": punch_time
+        }
+        r = requests.post(
+            f"{API}/attendance/manual-punch-in",
+            headers={"Authorization": f"Bearer {token}"},
+            json=payload,
+            timeout=12
+        )
+        if r.status_code == 200:
+            return True, r.json()
+        detail = r.json().get("detail", f"Error {r.status_code}") if r.headers.get("content-type", "").startswith("application/json") else r.text
+        return False, detail
+    except requests.RequestException as e:
+        return False, f"Network error: {e}"
+
+
+def check_existing_punch_api(token: str, employee_code: str, punch_date):
+    """Check if attendance already exists for employee and date."""
+    try:
+        r = requests.get(
+            f"{API}/attendance/check",
+            headers={"Authorization": f"Bearer {token}"},
+            params={"employee_code": employee_code, "date": str(punch_date)},
+            timeout=10
+        )
+        if r.status_code == 200:
+            return True, r.json()
+        return False, None
+    except Exception:
+        return False, None
+
+
 def render_login():
     """Render the Attendance Report Record split-screen login page matching Image 2 UI design."""
     logo_data = get_asset_base64("iiit_logo.jpg")
@@ -1142,56 +1711,79 @@ def render_login():
                         st.error("Cannot connect to FastAPI backend service.")
 
 
-def render_navbar():
-    col_brand, col_nav, col_actions = st.columns([3, 5, 4])
-    
-    with col_brand:
+def _toggle_sidebar_cb():
+    st.session_state.sidebar_open = not st.session_state.get("sidebar_open", True)
+
+def _set_active_tab_cb(tab_name):
+    st.session_state.active_tab = tab_name
+
+
+def render_sidebar():
+    """Render modern, collapsible two-mode (expanded & mini icon-dock) sidebar navigation matching user reference screenshot."""
+    is_open = st.session_state.get("sidebar_open", True)
+
+    with st.sidebar:
+        if not is_open:
+            # ── Mini Dock Mode (Collapsed ~68px) ──
+            st.button("☰", key="mini_toggle_btn", help="Expand Navigation Menu", on_click=_toggle_sidebar_cb, use_container_width=True)
+
+            st.markdown('<div style="height: 0.4rem; border-bottom: 1px solid #e2e8f0; margin-bottom: 0.5rem;"></div>', unsafe_allow_html=True)
+
+            dash_active = (st.session_state.active_tab == "dashboard")
+            emp_active = (st.session_state.active_tab == "employees")
+            upload_active = (st.session_state.active_tab == "upload")
+            manual_active = (st.session_state.active_tab == "manual_punch")
+
+            user_role = (st.session_state.get("role") or "").lower().replace("_", "-")
+            can_manual_punch = user_role in ("coordinator", "dean-faculty")
+
+            st.button("⊞", key="mini_nav_dash", type="primary" if dash_active else "secondary", help="Dashboard", on_click=_set_active_tab_cb, args=("dashboard",), use_container_width=True)
+            st.button("👥", key="mini_nav_emp", type="primary" if emp_active else "secondary", help="Employee Management", on_click=_set_active_tab_cb, args=("employees",), use_container_width=True)
+            st.button("⤒", key="mini_nav_upload", type="primary" if upload_active else "secondary", help="Upload & Process Attendance", on_click=_set_active_tab_cb, args=("upload",), use_container_width=True)
+            if can_manual_punch:
+                st.button("⏱️", key="mini_nav_manual", type="primary" if manual_active else "secondary", help="Manual Punch-in", on_click=_set_active_tab_cb, args=("manual_punch",), use_container_width=True)
+
+            return
+
+        # ── Full Expanded Mode (~250px) ──
+        logo_data = get_asset_base64("IIITB_logo1.png") or get_asset_base64("iiit_logo.jpg")
+        logo_html = (
+            f'<img src="{logo_data}" alt="IIIT-B Logo" style="height: 48px; max-width: 100%; object-fit: contain;" />'
+            if logo_data else '<span style="font-size: 1.5rem; font-weight: 700; color: #1e3a8a;">IIIT-B</span>'
+        )
+
+        col_toggle, col_logo = st.columns([1, 2.5], vertical_alignment="center")
+        with col_toggle:
+            st.button("☰", key="sidebar_close_btn", help="Collapse Sidebar", on_click=_toggle_sidebar_cb)
+        with col_logo:
+            st.markdown(f'<div style="display: flex; align-items: center; justify-content: flex-start; padding-left: 0.2rem;">{logo_html}</div>', unsafe_allow_html=True)
+
         st.markdown(clean_html("""
-            <div style="display: flex; align-items: center; gap: 0.5rem; padding-top: 0.2rem;">
-                <span style="font-size: 1.5rem;">⏱️</span>
-                <div style="font-weight: 700; font-size: 1.15rem; color: #f8fafc;">Attendance Punch-In</div>
+            <div style="text-align: center; margin: 1.15rem 0 0.85rem 0; font-size: 0.84rem; font-weight: 600; color: #1e3a8a; line-height: 1.4; font-family: 'Inter', system-ui, -apple-system, sans-serif;">
+                International Institute of<br/>Information Technology<br/>Bangalore
             </div>
+            <div style="border-bottom: 1px solid #e2e8f0; margin-bottom: 0.85rem;"></div>
         """), unsafe_allow_html=True)
-        
-    with col_nav:
-        n1, n2, n3 = st.columns(3)
-        with n1:
-            if st.button("📊 Dashboard", type="primary" if st.session_state.active_tab == "dashboard" else "secondary", use_container_width=True):
-                st.session_state.active_tab = "dashboard"
-                st.rerun()
-        with n2:
-            if st.button("📤 Upload & Process", type="primary" if st.session_state.active_tab == "upload" else "secondary", use_container_width=True):
-                st.session_state.active_tab = "upload"
-                st.rerun()
-        with n3:
-            if st.button("📈 Reports", type="primary" if st.session_state.active_tab == "report" else "secondary", use_container_width=True):
-                st.session_state.active_tab = "report"
-                st.rerun()
 
-    with col_actions:
-        # User & Role badge placed right next to the logout button
-        u_col, btn_col = st.columns([2.2, 1.2])
-        role_icon = "🎓" if st.session_state.get("role") == "dean-faculty" else "👤"
-        role_style = "background: rgba(16, 185, 129, 0.15); border-color: rgba(16, 185, 129, 0.3); color: #34d399;" if st.session_state.get("role") == "dean-faculty" else ""
-        
-        with u_col:
-            st.markdown(clean_html(f"""
-                <div style="text-align: right; padding-top: 0.35rem;">
-                    <span class="user-badge" style="{role_style}">{role_icon} {st.session_state.get('user', 'user')}</span>
-                </div>
-            """), unsafe_allow_html=True)
-        with btn_col:
-            if st.button("Logout", key="top_logout", type="secondary", use_container_width=True):
-                st.session_state.clear()
-                st.rerun()
+        dash_active = (st.session_state.active_tab == "dashboard")
+        emp_active = (st.session_state.active_tab == "employees")
+        upload_active = (st.session_state.active_tab == "upload")
+        manual_active = (st.session_state.active_tab == "manual_punch")
 
-    st.divider()
+        user_role = (st.session_state.get("role") or "").lower().replace("_", "-")
+        can_manual_punch = user_role in ("coordinator", "dean-faculty")
+
+        st.button("⊞   Dashboard", key="side_btn_dashboard", type="primary" if dash_active else "secondary", on_click=_set_active_tab_cb, args=("dashboard",), use_container_width=True)
+        st.button("👥   Employees", key="side_btn_employees", type="primary" if emp_active else "secondary", on_click=_set_active_tab_cb, args=("employees",), use_container_width=True)
+        st.button("⤒   Upload & Process", key="side_btn_upload", type="primary" if upload_active else "secondary", on_click=_set_active_tab_cb, args=("upload",), use_container_width=True)
+        if can_manual_punch:
+            st.button("⏱️   Manual Punch-in", key="side_btn_manual", type="primary" if manual_active else "secondary", on_click=_set_active_tab_cb, args=("manual_punch",), use_container_width=True)
 
 
 def create_plotly_bar_chart(x_vals, y_vals, title, x_title, y_title, is_percentage=False):
-    """Create a high-end, responsive Plotly dark-themed bar chart."""
+    """Create a high-end, responsive Plotly light-themed bar chart."""
     fig = go.Figure()
-    
+
     hover_template = "%{x}: <b>%{y:.1f}%</b><extra></extra>" if is_percentage else "%{x}: <b>%{y:,}</b><extra></extra>"
     text_labels = [f"{v:.1f}%" if is_percentage else f"{v:,}" for v in y_vals]
 
@@ -1200,21 +1792,21 @@ def create_plotly_bar_chart(x_vals, y_vals, title, x_title, y_title, is_percenta
         y=y_vals,
         marker=dict(
             color=y_vals,
-            colorscale=[[0, "#0077b6"], [0.5, "#00b4d8"], [1.0, "#38bdf8"]],
-            line=dict(color="rgba(255,255,255,0.2)", width=1)
+            colorscale=[[0, "#00b4d8"], [0.5, "#009bbd"], [1.0, "#0077b6"]],
+            line=dict(color="rgba(0, 155, 189, 0.2)", width=1)
         ),
         hovertemplate=hover_template,
         text=text_labels,
         textposition="outside",
-        textfont=dict(color="#f8fafc", size=11, family="Inter, sans-serif")
+        textfont=dict(color="#1e293b", size=11, family="Inter, sans-serif")
     ))
-    
+
     fig.update_layout(
-        title=dict(text=title, font=dict(size=15, color="#f8fafc", family="Inter, sans-serif")),
-        xaxis=dict(title=x_title, tickfont=dict(color="#cbd5e1"), gridcolor="rgba(255,255,255,0.05)"),
-        yaxis=dict(title=y_title, tickfont=dict(color="#cbd5e1"), gridcolor="rgba(255,255,255,0.08)"),
+        title=dict(text=title, font=dict(size=14, color="#0f172a", family="Inter, sans-serif")),
+        xaxis=dict(title=x_title, tickfont=dict(color="#475569"), gridcolor="rgba(0,0,0,0.05)"),
+        yaxis=dict(title=y_title, tickfont=dict(color="#475569"), gridcolor="rgba(0,0,0,0.06)"),
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(15, 23, 42, 0.6)",
+        plot_bgcolor="#ffffff",
         margin=dict(l=20, r=20, t=40, b=30),
         height=340,
         showlegend=False
@@ -1222,82 +1814,128 @@ def create_plotly_bar_chart(x_vals, y_vals, title, x_title, y_title, is_percenta
     return fig
 
 def create_plotly_area_chart(x_vals, y_vals, title, x_title, y_title):
-    """Create a high-end Plotly dark-themed area line trend chart."""
+    """Create a high-end Plotly light-themed area line trend chart."""
     fig = go.Figure()
-    
+
     fig.add_trace(go.Scatter(
         x=x_vals,
         y=y_vals,
         mode="lines+markers",
         fill="tozeroy",
-        fillcolor="rgba(0, 180, 216, 0.15)",
-        line=dict(color="#00b4d8", width=3, shape="spline"),
-        marker=dict(size=7, color="#0077b6", line=dict(color="#ffffff", width=1.5)),
+        fillcolor="rgba(0, 155, 189, 0.12)",
+        line=dict(color="#009bbd", width=2.5, shape="spline"),
+        marker=dict(size=6, color="#0077b6", line=dict(color="#ffffff", width=1.5)),
         hovertemplate="%{x}: <b>%{y:,} Swipes</b><extra></extra>"
     ))
-    
+
     fig.update_layout(
-        title=dict(text=title, font=dict(size=15, color="#f8fafc", family="Inter, sans-serif")),
-        xaxis=dict(title=x_title, tickfont=dict(color="#cbd5e1"), gridcolor="rgba(255,255,255,0.05)"),
-        yaxis=dict(title=y_title, tickfont=dict(color="#cbd5e1"), gridcolor="rgba(255,255,255,0.08)"),
+        title=dict(text=title, font=dict(size=14, color="#0f172a", family="Inter, sans-serif")),
+        xaxis=dict(title=x_title, tickfont=dict(color="#475569"), gridcolor="rgba(0,0,0,0.05)"),
+        yaxis=dict(title=y_title, tickfont=dict(color="#475569"), gridcolor="rgba(0,0,0,0.06)"),
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(15, 23, 42, 0.6)",
+        plot_bgcolor="#ffffff",
         margin=dict(l=20, r=20, t=40, b=30),
         height=340
     )
     return fig
 
 def create_plotly_donut_chart(labels, values, title):
-    """Create a high-end Plotly donut chart for mode & area breakdowns."""
+    """Create a high-end Plotly light-themed donut chart."""
     fig = go.Figure(data=[go.Pie(
         labels=labels,
         values=values,
         hole=0.55,
-        marker=dict(colors=["#0077b6", "#00b4d8", "#38bdf8", "#34d399", "#f59e0b", "#ec4899"]),
+        marker=dict(colors=["#009bbd", "#0284c7", "#38bdf8", "#10b981", "#f59e0b", "#ec4899"]),
         textinfo="percent+label",
         hoverinfo="label+value+percent",
         textfont=dict(color="#ffffff")
     )])
-    
+
     fig.update_layout(
-        title=dict(text=title, font=dict(size=15, color="#f8fafc", family="Inter, sans-serif")),
+        title=dict(text=title, font=dict(size=14, color="#0f172a", family="Inter, sans-serif")),
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=20, r=20, t=40, b=20),
         height=340,
         showlegend=True,
-        legend=dict(font=dict(color="#cbd5e1"))
+        legend=dict(font=dict(color="#475569"))
     )
     return fig
 
+def render_top_bar(title: str, subtitle: str = "", show_refresh: bool = False, refresh_key: str = None) -> bool:
+    """Render top teal app bar matching the reference screenshot with user avatar and Logout button."""
+    user = st.session_state.get("user", "coordinator")
+    role = st.session_state.get("role", "coordinator")
+    initial = (user[0] if user else "C").upper()
+
+    # Clean title without leading emojis for the top teal bar
+    clean_title = re.sub(r'^[^\w\s]+\s*', '', title).strip()
+    key_slug = re.sub(r'[^a-zA-Z0-9]', '_', clean_title.lower())[:12]
+
+    # Top Teal App Bar Banner with C badge and clean Logout button
+    st.markdown(clean_html(f"""
+        <div class="top-teal-bar">
+            <div class="top-teal-title">{clean_title}</div>
+            <div class="top-teal-right">
+                <span class="user-name-label">{user}</span>
+                <span class="user-avatar-badge" title="{user} ({role})">{initial}</span>
+                <a href="?action=logout" class="top-teal-logout-btn" title="Sign out" target="_self">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align: -2px; margin-right: 4px;"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>Logout
+                </a>
+            </div>
+        </div>
+    """), unsafe_allow_html=True)
+
+    refreshed = False
+    if show_refresh:
+        col_sub, col_ref = st.columns([9.5, 1.5])
+        with col_sub:
+            if subtitle:
+                st.markdown(f"<div style='font-size: 0.88rem; color: #64748b; margin: 0.35rem 0 1rem 0.2rem;'>{subtitle}</div>", unsafe_allow_html=True)
+            else:
+                st.markdown("<div style='margin-bottom: 0.4rem;'></div>", unsafe_allow_html=True)
+        with col_ref:
+            st.markdown("<div style='padding-top: 0.1rem;'></div>", unsafe_allow_html=True)
+            if st.button("↻ Refresh", key=refresh_key or f"refr_{key_slug}", use_container_width=True):
+                refreshed = True
+    else:
+        if subtitle:
+            st.markdown(f"<div style='font-size: 0.88rem; color: #64748b; margin: 0.35rem 0 1rem 0.2rem;'>{subtitle}</div>", unsafe_allow_html=True)
+        else:
+            st.markdown("<div style='margin-bottom: 0.4rem;'></div>", unsafe_allow_html=True)
+
+    return refreshed
+
+
 def render_dashboard():
-    st.markdown("## 📊 Attendance Analytics Dashboard")
-    st.caption("Select a processed report cycle below to view monthwise, datewise, and employee analytics.")
+    refreshed = render_top_bar(
+        title="Attendance Analytics Dashboard",
+        subtitle="Analyze employee attendance trends financial year-wise and month-wise across institutional cycles.",
+        show_refresh=True,
+        refresh_key="refresh_dash_btn"
+    )
+    if refreshed:
+        st.session_state.pop("dash_analytics_data", None)
+        st.rerun()
 
-    # Refresh button
-    _, col_refresh = st.columns([6, 1])
-    with col_refresh:
-        if st.button("🔄 Refresh", key="refresh_reports_btn", use_container_width=True):
-            st.session_state.pop("available_reports", None)
-            st.session_state.pop("selected_report_uuid", None)
-            st.session_state.analytics_data = None
+    # Read active filters from session state if previously set
+    selected_fy = st.session_state.get("dash_selected_fy")
+    selected_month = st.session_state.get("dash_selected_month")
 
-    # Load available reports (lazily cached in session_state)
-    if st.session_state.get("available_reports") is None:
-        with st.spinner("⏳ Loading available reports from database..."):
-            st.session_state.available_reports = fetch_reports(st.session_state.token)
+    # Fetch analytics
+    data = fetch_dashboard_analytics_api(
+        st.session_state.token,
+        financial_year=selected_fy,
+        month=selected_month
+    )
 
-    reports = st.session_state.get("available_reports") or []
-
-    if not reports:
-        # ─── Empty State ────────────────────────────────────────────────────
+    if not data or data.get("total_dates", 0) == 0:
         st.markdown(clean_html("""
             <div class="glass-card" style="text-align: center; padding: 3rem 2rem; margin-top: 1rem;">
-                <div style="font-size: 3.5rem; margin-bottom: 1rem;">📭</div>
-                <h3 style="color: #94a3b8; margin-bottom: 0.5rem;">No Reports Generated Yet</h3>
+                <h3 style="color: #475569; margin-bottom: 0.5rem; font-size: 1.25rem;">No Attendance Data Found</h3>
                 <p style="color: #64748b; font-size: 0.95rem; max-width: 480px; margin: 0 auto;">
-                    Process your Attendance &amp; Swipe Excel files first to generate analytics reports.
-                    Once processed, all report cycles will appear here automatically.
+                    No attendance records match the selected financial year or period.
+                    Upload Attendance &amp; Swipe Excel files or add manual punches to generate analytics.
                 </p>
             </div>
         """), unsafe_allow_html=True)
@@ -1305,58 +1943,82 @@ def render_dashboard():
         c1, c2, c3, c4 = st.columns(4)
         for col, val, label in [
             (c1, "—", "Total Employees"), (c2, "—", "Dates Analyzed"),
-            (c3, "—%", "Punch-In Rate"), (c4, "🟢", "System Status")
+            (c3, "—%", "Punch-In Rate"), (c4, "Active", "System Status")
         ]:
             with col:
                 st.markdown(f'<div class="stat-box"><div class="stat-val">{val}</div><div class="stat-label">{label}</div></div>', unsafe_allow_html=True)
 
         st.markdown("<br>", unsafe_allow_html=True)
-        if st.button("📤 Go to Upload & Process →", type="primary"):
+        if st.button("Go to Upload & Process →", type="primary"):
             st.session_state.active_tab = "upload"
             st.rerun()
         return
 
-    # ─── Report Cycle Selector ──────────────────────────────────────────────
-    options = {}
-    for rep in reports:
-        cycle = rep.get("cycle_label", "Unknown Cycle")
-        fname = (rep.get("attendance_filename") or "Unnamed").replace(".xlsx", "").replace(".xlsm", "")
-        created = (rep.get("created_at") or "")[:10]
-        label = f"📅  {cycle}   |   {fname}   ({created})"
-        options[label] = rep["job_uuid"]
+    # ─── Financial Year & Month Filter Controls ──────────────────────────────
+    fys = data.get("financial_years", ["FY 2026-27"])
+    active_fy = data.get("selected_financial_year", fys[0] if fys else "FY 2026-27")
+    fy_idx = fys.index(active_fy) if active_fy in fys else 0
 
-    default_idx = 0
-    if st.session_state.get("selected_report_uuid") in list(options.values()):
-        default_idx = list(options.values()).index(st.session_state.selected_report_uuid)
+    months_list = ["All Months (Full FY)"] + (data.get("available_months") or [])
+    active_month = data.get("selected_month", "All Months (Full FY)")
+    month_idx = months_list.index(active_month) if active_month in months_list else 0
 
-    selected_label = st.selectbox(
-        "📂 Select Report Cycle to Analyze",
-        list(options.keys()),
-        index=default_idx,
-        key="report_cycle_selector"
-    )
-    selected_uuid = options[selected_label]
+    st.markdown(clean_html("""
+        <div style="margin-top: 0.25rem; margin-bottom: 0.5rem;">
+            <span style="font-weight: 700; font-size: 1.05rem; color: #0f172a; font-family: 'Inter', sans-serif;">
+                🎯 Analytics Filter
+            </span>
+            <span style="font-size: 0.85rem; color: #64748b; margin-left: 0.5rem;">
+                Select Financial Year and drill down into specific months
+            </span>
+        </div>
+    """), unsafe_allow_html=True)
 
-    # Load analytics for the selected report if changed or not yet loaded
-    if st.session_state.get("selected_report_uuid") != selected_uuid or st.session_state.analytics_data is None:
-        with st.spinner("⏳ Loading report analytics from database..."):
-            detail = fetch_report_detail(selected_uuid, st.session_state.token)
-            if detail:
-                st.session_state.analytics_data = detail
-                st.session_state.analytics_file_name = detail.get("attendance_filename", "Report")
-                st.session_state.selected_report_uuid = selected_uuid
-            else:
-                st.error("❌ Could not load analytics for this report. It may have no attendance records stored yet.")
-                return
+    fcol1, fcol2 = st.columns([1, 1])
+    with fcol1:
+        new_fy = st.selectbox(
+            "📅 Financial Year:",
+            options=fys,
+            index=fy_idx,
+            key="dash_selected_fy"
+        )
+    with fcol2:
+        new_month = st.selectbox(
+            "🗓️ Month Filter:",
+            options=months_list,
+            index=month_idx,
+            key="dash_selected_month"
+        )
 
-    data = st.session_state.analytics_data
-    if not data:
-        st.warning("No analytics data loaded. Please select a report above.")
-        return
+    # If the user changed the selectbox during interaction, reload if needed
+    if new_fy != active_fy or new_month != active_month:
+        updated_data = fetch_dashboard_analytics_api(
+            st.session_state.token,
+            financial_year=new_fy,
+            month=new_month
+        )
+        if updated_data:
+            data = updated_data
+            active_fy = data.get("selected_financial_year", new_fy)
+            active_month = data.get("selected_month", new_month)
 
-    # ─── Report Header ──────────────────────────────────────────────────────
-    cycle_label = data.get("cycle_label", "Report")
-    st.markdown(f"### 📈 Analytics: `{cycle_label}`")
+    # ─── Scope Header Banner ────────────────────────────────────────────────
+    st.markdown(clean_html(f"""
+        <div class="glass-card" style="margin: 0.85rem 0 1.25rem 0; padding: 0.85rem 1.25rem; border-left: 4px solid #009bbd; display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem;">
+            <div style="display: flex; align-items: center; gap: 0.65rem; flex-wrap: wrap;">
+                <span style="font-size: 1.1rem; font-weight: 700; color: #0f172a;">
+                    📅 {active_fy}
+                </span>
+                <span style="color: #cbd5e1;">|</span>
+                <span style="font-size: 0.95rem; color: #334155; font-weight: 600;">
+                    🗓️ {active_month}
+                </span>
+            </div>
+            <div style="font-size: 0.84rem; color: #0369a1; font-weight: 600; background: #e0f2fe; padding: 0.3rem 0.75rem; border-radius: 9999px;">
+                {data.get('total_dates', 0)} Active Dates &nbsp;•&nbsp; {data.get('total_employees', 0)} Employees
+            </div>
+        </div>
+    """), unsafe_allow_html=True)
 
     # ─── 4 Key Metric Cards ──────────────────────────────────────────────────
     m1, m2, m3, m4 = st.columns(4)
@@ -1367,126 +2029,148 @@ def render_dashboard():
     with m3:
         st.markdown(f'<div class="stat-box"><div class="stat-val">{data["total_punches"]:,} / {data["total_possible"]:,}</div><div class="stat-label">Matched Punch-Ins</div></div>', unsafe_allow_html=True)
     with m4:
-        st.markdown(f'<div class="stat-box"><div class="stat-val" style="color: #34d399;">{data["completion_rate"]}%</div><div class="stat-label">Punch-In Completion Rate</div></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="stat-box"><div class="stat-val">{data["completion_rate"]}%</div><div class="stat-label">Punch-In Completion Rate</div></div>', unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-bottom: 1.25rem;'></div>", unsafe_allow_html=True)
 
     # ─── MONTHWISE ANALYTICS ─────────────────────────────────────────────────
-    st.markdown("### 🗓️ Month-Wise Analytics")
-    month_counts = data.get("month_counts", {})
-    col_m1, col_m2 = st.columns([1, 1])
-    with col_m1:
-        st.markdown("#### Summary Table")
-        month_table_data = []
-        for m_name, m_info in month_counts.items():
-            rate_val = m_info.get("rate", round((m_info["punches"] / m_info["total"] * 100), 1) if m_info.get("total", 0) > 0 else 0)
-            month_table_data.append({"Month": m_name, "Punch-Ins Recorded": m_info["punches"], "Expected Slots": m_info["total"], "Completion Rate": f"{rate_val}%"})
-        st.dataframe(month_table_data, use_container_width=True)
-    with col_m2:
-        if month_counts:
-            month_names = list(month_counts.keys())
-            month_rates = [m_info.get("rate", round((m_info["punches"] / m_info["total"] * 100), 1) if m_info.get("total", 0) > 0 else 0) for m_info in month_counts.values()]
-            fig_month = create_plotly_bar_chart(month_names, month_rates, "Monthwise Completion Rate (%)", "Month", "Completion Rate (%)", is_percentage=True)
+    st.markdown(f"### 🗓️ Financial Year Month-Wise Analytics ({active_fy})")
+    month_summary = data.get("month_summary", [])
+    if month_summary:
+        col_m1, col_m2 = st.columns([1, 1])
+        with col_m1:
+            st.markdown("#### Monthly Summary")
+            month_table_data = []
+            for m_info in month_summary:
+                month_table_data.append({
+                    "Month": m_info["month_name"],
+                    "Active Dates": m_info["dates_count"],
+                    "Punch-Ins Recorded": f"{m_info['punches']:,}",
+                    "Expected Slots": f"{m_info['total']:,}",
+                    "Completion Rate": f"{m_info['completion_rate']}%"
+                })
+            st.dataframe(month_table_data, use_container_width=True)
+        with col_m2:
+            m_names = [m["month_short"] + " (" + m["month_name"].split()[-1] + ")" if " " in m["month_name"] else m["month_name"] for m in month_summary]
+            m_rates = [m["completion_rate"] for m in month_summary]
+            fig_month = create_plotly_bar_chart(
+                m_names,
+                m_rates,
+                f"Month-Wise Completion Rate (%) — {active_fy}",
+                "Month",
+                "Completion Rate (%)",
+                is_percentage=True
+            )
             st.plotly_chart(fig_month, use_container_width=True)
+    else:
+        st.info("No monthly breakdown available for this selection.")
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-bottom: 1.25rem;'></div>", unsafe_allow_html=True)
 
     # ─── DATEWISE ANALYTICS ──────────────────────────────────────────────────
-    st.markdown("### 📅 Date-Wise Analytics")
+    view_title = active_month if active_month != "All Months (Full FY)" else f"All Dates in {active_fy}"
+    st.markdown(f"### 📈 Date-Wise Daily Trends ({view_title})")
     daily_counts = data.get("daily_counts", {})
     if daily_counts:
-        date_labels = list(daily_counts.keys())
-        daily_punches = [d_info["punches"] for d_info in daily_counts.values()]
-        fig_date = create_plotly_area_chart(date_labels, daily_punches, "Daily Punch-In Volume Trend", "Date", "Punch-Ins")
+        date_labels = [d.get("date_display", k) for k, d in daily_counts.items()]
+        daily_punches = [d["punches"] for d in daily_counts.values()]
+        fig_date = create_plotly_area_chart(
+            date_labels,
+            daily_punches,
+            f"Daily Punch-In Volume Trend ({view_title})",
+            "Date",
+            "Punch-Ins"
+        )
         st.plotly_chart(fig_date, use_container_width=True)
 
-    st.markdown("#### 📋 Date-Wise Breakdown (Daily Summary)")
+    st.markdown("#### Daily Attendance Breakdown")
     daily_table = []
-    for d_label, d_info in daily_counts.items():
+    for k, d_info in daily_counts.items():
         punches = d_info["punches"]
         tot = d_info["total"]
         pct = round((punches / tot * 100), 1) if tot > 0 else 0
-        # Prefer explicit first/last punch stored by API; fall back to min/max of times list
-        times = d_info.get("times", [])
-        first_punch = d_info.get("first_punch") or (min(times) if times else "—")
-        last_punch  = d_info.get("last_punch")  or (max(times) if times else "—")
+        first_punch = d_info.get("first_punch") or "—"
+        last_punch = d_info.get("last_punch") or "—"
         daily_table.append({
-            "Date": d_label,
-            "Punch-Ins": punches,
-            "Total Employees": tot,
+            "Date": d_info.get("date_display", k),
+            "Day": d_info.get("day_name", "—"),
+            "Month": d_info.get("month_name", "—"),
+            "Punch-Ins": f"{punches:,}",
+            "Total Employees": f"{tot:,}",
             "Attendance %": f"{pct}%",
-            "Earliest Punch-In": first_punch or "—",
-            "Latest Punch-In": last_punch or "—"
+            "Earliest Punch-In": first_punch,
+            "Latest Punch-In": last_punch
         })
     st.dataframe(daily_table, use_container_width=True)
 
     # Per-employee per-date detail table
     emp_daily_records = data.get("employee_daily_records", [])
     if emp_daily_records:
-        st.markdown("#### 👤 Employee-Wise Punch-In Detail")
-        emp_names_map = data.get("emp_names", {})
+        st.markdown("<div style='margin-top: 1rem;'></div>", unsafe_allow_html=True)
+        col_hdr, col_srch = st.columns([3, 2])
+        with col_hdr:
+            st.markdown("#### Detailed Punch-In Roster")
+        with col_srch:
+            search_emp = st.text_input(
+                "Search employee",
+                placeholder="🔍 Search employee name or code...",
+                label_visibility="collapsed",
+                key=f"dash_emp_search_{active_fy}_{active_month}"
+            )
+
+        if search_emp:
+            se = search_emp.strip().lower()
+            emp_daily_records = [
+                r for r in emp_daily_records
+                if se in str(r.get("employee_code", "")).lower() or se in str(r.get("employee_name", "")).lower()
+            ]
+
         emp_detail_table = []
         for row in emp_daily_records:
-            emp_code = row.get("employee_code", "")
-            emp_name = row.get("employee_name") or emp_names_map.get(emp_code, "")
-            status = row.get("status", "—")
-            status_icon = "✅ Present" if status == "Present" else "❌ Absent"
             emp_detail_table.append({
-                "Date": row.get("date", "—"),
-                "Employee Code": emp_code,
-                "Employee Name": emp_name or "—",
+                "Date": row.get("date_display") or row.get("date", "—"),
+                "Employee Code": row.get("employee_code", ""),
+                "Employee Name": row.get("employee_name") or "—",
                 "Punch-In Time": row.get("punch_in_time", "—"),
-                "Status": status_icon
+                "Status": row.get("status", "—")
             })
-        st.dataframe(emp_detail_table, use_container_width=True)
+        st.dataframe(emp_detail_table, use_container_width=True, height=450)
 
-
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown("<div style='margin-bottom: 1.25rem;'></div>", unsafe_allow_html=True)
 
     # ─── EMPLOYEE INSIGHTS ───────────────────────────────────────────────────
-    st.markdown("### 👤 Employee Attendance Insights")
-    emp_counts = data.get("emp_punch_count", {})
-    emp_names  = data.get("emp_names", {})
-    total_dates = data.get("total_dates", 1) or 1
-
+    st.markdown(f"### 👥 Employee Attendance Insights ({active_month})")
     ec1, ec2 = st.columns([1, 1])
     with ec1:
-        st.markdown("#### 🏆 Top Performers (Most Punch-Ins)")
-        sorted_emps = sorted(emp_counts.items(), key=lambda x: x[1], reverse=True)[:10]
-        top_emp_data = []
-        for emp, count in sorted_emps:
-            row = {"Employee Code": emp, "Total Punch-Ins": count, "Attendance %": f"{round(count / total_dates * 100, 1)}%"}
-            if emp_names.get(emp):
-                row["Employee Name"] = emp_names[emp]
-            top_emp_data.append(row)
-        st.dataframe(top_emp_data, use_container_width=True)
+        st.markdown("#### 🏆 Highest Attendance Frequency")
+        top_data = data.get("top_performers", [])
+        if top_data:
+            st.dataframe(top_data, use_container_width=True)
+        else:
+            st.info("No employee punch-in data available.")
 
     with ec2:
-        st.markdown("#### ⚠️ Employees with Missing Punch-Ins")
-        missing_emps = []
-        for emp, count in emp_counts.items():
-            if count < total_dates:
-                row = {"Employee Code": emp, "Punches Found": count, "Missing Days": total_dates - count, "Attendance %": f"{round(count / total_dates * 100, 1)}%"}
-                if emp_names.get(emp):
-                    row["Employee Name"] = emp_names[emp]
-                missing_emps.append(row)
-        missing_emps.sort(key=lambda x: x["Missing Days"], reverse=True)
-        if missing_emps:
-            st.dataframe(missing_emps[:10], use_container_width=True)
+        st.markdown("#### ⚠️ Employees with Missing / Incomplete Punch-Ins")
+        missing_data = data.get("missing_punch_employees", [])
+        if missing_data:
+            st.dataframe(missing_data, use_container_width=True)
         else:
             st.success("🎉 All employees have complete punch-in records!")
 
 
 def render_upload():
-    st.markdown("## 📤 Upload & Process Attendance")
-    st.caption("Upload Attendance Master file and Swipe file to automatically insert Punchin Times.")
+    render_top_bar(
+        title="Upload & Process Attendance",
+        subtitle="Upload Attendance Master file and Swipe file to automatically insert Punchin Times.",
+        show_refresh=False
+    )
 
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown(clean_html("""
             <div class="glass-card">
-                <h4 style="color: #00b4d8; margin: 0;">1. Attendance Master Excel</h4>
+                <h4 style="color: #0f172a; font-size: 1.05rem; margin: 0; font-weight: 600;">1. Attendance Master Excel</h4>
             </div>
         """), unsafe_allow_html=True)
         af = st.file_uploader("Select Attendance File", type=["xlsx", "xlsm"], key="att_file")
@@ -1495,7 +2179,7 @@ def render_upload():
     with col2:
         st.markdown(clean_html("""
             <div class="glass-card">
-                <h4 style="color: #38bdf8; margin: 0;">2. Swipe Log Excel</h4>
+                <h4 style="color: #0f172a; font-size: 1.05rem; margin: 0; font-weight: 600;">2. Swipe Log Excel</h4>
             </div>
         """), unsafe_allow_html=True)
         sf = st.file_uploader("Select Swipe Log File", type=["xlsx", "xlsm"], key="swp_file")
@@ -1503,14 +2187,14 @@ def render_upload():
 
     st.markdown("<br>", unsafe_allow_html=True)
     
-    st.info("💡 **Rule**: Employee Code + Date are matched across files. The earliest swipe timestamp is picked as Punchin Time. Dates without swipes remain blank.")
+    st.info("**Rule**: Employee Code + Date are matched across files. The earliest swipe timestamp is picked as Punchin Time. Dates without swipes remain blank.")
 
-    if st.button("⚡ Generate & Process Punch-In Excel", type="primary", use_container_width=True):
+    if st.button("Generate & Process Punch-In Excel", type="primary", use_container_width=True):
         if not af or not sf:
-            st.error("⚠️ Please select both the Attendance Excel file and Swipe Log Excel file.")
+            st.error("Please select both the Attendance Excel file and Swipe Log Excel file.")
             return
         
-        with st.spinner("⏳ Processing Excel spreadsheets, parsing swipes, and calculating punch-in times..."):
+        with st.spinner("Processing Excel spreadsheets, parsing swipes, and calculating punch-in times..."):
             try:
                 r = requests.post(
                     f"{API}/process",
@@ -1531,7 +2215,7 @@ def render_upload():
                     invalid_swipes = int(r.headers.get("X-Invalid-Swipes", "0"))
                     date_count = int(r.headers.get("X-Date-Count", "0"))
                     
-                    st.success("✅ Updated Attendance Excel generated successfully!")
+                    st.success("Updated Attendance Excel generated successfully!")
 
                     # Clear reports cache so Dashboard auto-loads the new report on next visit
                     st.session_state.pop("available_reports", None)
@@ -1557,77 +2241,859 @@ def render_upload():
                         "date_count": date_count
                     })
 
-                    st.download_button(
-                        label="📥 Download Updated Attendance Excel",
-                        data=BytesIO(r.content),
-                        file_name="Updated_Attendance_Punchin.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True,
-                        type="primary"
-                    )
+                    col_dl, col_nav1 = st.columns([2, 1])
+                    with col_dl:
+                        st.download_button(
+                            label="Download Updated Attendance Excel",
+                            data=BytesIO(r.content),
+                            file_name="Updated_Attendance_Punchin.xlsx",
+                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                            use_container_width=True,
+                            type="primary"
+                        )
+                    with col_nav1:
+                        if st.button("View Dashboard →", use_container_width=True, key="post_proc_dash_btn"):
+                            st.session_state.active_tab = "dashboard"
+                            st.rerun()
                 elif r.status_code == 401:
                     st.session_state.clear()
                     st.error("Session expired. Please sign in again.")
                     st.rerun()
                 else:
                     detail = r.json().get("detail", "Processing failed.")
-                    st.error(f"❌ Error: {detail}")
+                    st.error(f"Error: {detail}")
             except requests.RequestException as e:
-                st.error(f"❌ Backend connection error: {e}")
+                st.error(f"Backend connection error: {e}")
 
-def render_reports():
-    st.markdown("## 📈 Processing Reports & Analytics Log")
-    st.caption("Review detailed records, batch logs, and swipe match statistics.")
+    # ── Render Batch Execution Logs & Generated Reports directly below upload ──
+    st.markdown("<div style='border-bottom: 2px solid #e2e8f0; margin: 2.2rem 0 1.5rem 0;'></div>", unsafe_allow_html=True)
+    render_batch_reports_section(in_upload_page=True)
 
-    if not st.session_state.history:
-        st.info("ℹ️ No processing batches run in this session yet. Upload files in **Upload & Process** to generate reports!")
+
+def render_batch_reports_section(in_upload_page: bool = True):
+    """Render the Batch Execution Logs & Generated Reports table and interactive on-screen Excel viewer."""
+    kp = "up" if in_upload_page else "rep"
+
+    st.markdown(clean_html("""
+        <div style="margin-top: 0.5rem; margin-bottom: 0.85rem;">
+            <h3 style="color: #0f172a; font-size: 1.35rem; font-weight: 700; margin: 0; font-family: 'Inter', sans-serif;">
+                📋 Batch Execution Logs &amp; Generated Reports
+            </h3>
+            <p style="color: #64748b; font-size: 0.88rem; margin-top: 0.25rem;">
+                Review past processing batches, inspect the full generated Excel spreadsheet on-screen, and download the processed workbooks.
+            </p>
+        </div>
+    """), unsafe_allow_html=True)
+
+    # Load available reports from backend database
+    if st.session_state.get("available_reports") is None:
+        with st.spinner("Loading report history from database..."):
+            st.session_state.available_reports = fetch_reports(st.session_state.token)
+
+    db_reports = st.session_state.get("available_reports") or []
+
+    # Map database records into unified display records
+    unified_records = []
+    seen_uuids = set()
+    for r in db_reports:
+        job_uuid = r.get("job_uuid", "")
+        raw_created = r.get("created_at") or ""
+        created_display = raw_created[:19].replace("T", " ") if raw_created else "—"
+        if job_uuid:
+            seen_uuids.add(job_uuid)
+        unified_records.append({
+            "job_uuid": job_uuid,
+            "created_at": created_display,
+            "cycle_label": r.get("cycle_label", "—"),
+            "attendance_file": r.get("attendance_filename") or "—",
+            "swipe_file": r.get("swipe_filename") or "—",
+            "valid_swipes": r.get("valid_swipes_count", 0),
+            "invalid_swipes": r.get("invalid_swipes_count", 0),
+            "date_count": r.get("date_count", 0),
+            "status": r.get("status", "COMPLETED"),
+            "username": r.get("username", "coordinator")
+        })
+
+    # Merge session history
+    for h in st.session_state.get("history", []):
+        ts = h.get("timestamp", "")
+        matching = any(u["created_at"].startswith(ts[:16]) for u in unified_records)
+        if not matching:
+            unified_records.append({
+                "job_uuid": "",
+                "created_at": ts,
+                "cycle_label": "Recent Batch",
+                "attendance_file": h.get("attendance_file", "—"),
+                "swipe_file": h.get("swipe_file", "—"),
+                "valid_swipes": h.get("valid_swipes", 0),
+                "invalid_swipes": h.get("invalid_swipes", 0),
+                "date_count": h.get("date_count", 0),
+                "status": "COMPLETED",
+                "username": st.session_state.get("user", "coordinator")
+            })
+
+    if not unified_records:
+        st.markdown(clean_html("""
+            <div class="glass-card" style="text-align: center; padding: 2.5rem 1.5rem; margin-top: 0.75rem;">
+                <h4 style="color: #475569; margin-bottom: 0.35rem; font-size: 1.15rem;">No Processing Batches Found</h4>
+                <p style="color: #64748b; font-size: 0.9rem; max-width: 480px; margin: 0 auto;">
+                    No report runs have been recorded in the database yet.
+                    Upload Attendance &amp; Swipe Excel files above to generate your first report.
+                </p>
+            </div>
+        """), unsafe_allow_html=True)
         return
 
-    # Aggregate Analytics
-    total_runs = len(st.session_state.history)
-    total_valid = sum(h["valid_swipes"] for h in st.session_state.history)
-    total_invalid = sum(h["invalid_swipes"] for h in st.session_state.history)
-    
-    rc1, rc2, rc3 = st.columns(3)
+    # Aggregate Analytics KPIs
+    total_runs = len(unified_records)
+    total_valid = sum(h.get("valid_swipes", 0) for h in unified_records)
+    total_invalid = sum(h.get("invalid_swipes", 0) for h in unified_records)
+    total_dates = sum(h.get("date_count", 0) for h in unified_records)
+
+    rc1, rc2, rc3, rc4 = st.columns(4)
     with rc1:
         st.metric("Total Batches Processed", total_runs)
     with rc2:
         st.metric("Cumulative Valid Swipes", f"{total_valid:,}")
     with rc3:
         st.metric("Cumulative Invalid Swipes", f"{total_invalid:,}")
+    with rc4:
+        st.metric("Total Dates Updated", f"{total_dates:,}")
 
-    st.markdown("<br>", unsafe_allow_html=True)
-    st.subheader("📜 Batch Execution Logs")
-    
-    st.dataframe(
-        st.session_state.history,
-        use_container_width=True,
-        column_config={
-            "timestamp": "Execution Time",
-            "attendance_file": "Attendance File",
-            "swipe_file": "Swipe File",
-            "valid_swipes": "Valid Swipes",
-            "invalid_swipes": "Invalid / Skipped",
-            "date_count": "Dates Updated"
-        }
+    st.markdown("<div style='margin-bottom: 0.75rem;'></div>", unsafe_allow_html=True)
+
+    # Display Batch Execution Logs table
+    display_df = [{
+        "Execution Time": r["created_at"],
+        "Cycle": r["cycle_label"],
+        "Attendance File": r["attendance_file"],
+        "Swipe File": r["swipe_file"],
+        "Valid Swipes": f"{r['valid_swipes']:,}",
+        "Invalid / Skipped": f"{r['invalid_swipes']:,}",
+        "Dates Updated": r["date_count"],
+        "Processed By": r["username"],
+        "Status": r["status"]
+    } for r in unified_records]
+
+    st.dataframe(display_df, use_container_width=True)
+
+    # ── Report Inspector: Click/Select Report to View Whole Generated Excel ──
+    db_options = [r for r in unified_records if r.get("job_uuid")]
+    if not db_options:
+        return
+
+    st.markdown("<div style='margin-top: 1.5rem; margin-bottom: 0.5rem;'></div>", unsafe_allow_html=True)
+
+    # Report selection options
+    report_map = {}
+    for r in db_options:
+        label = f"{r['cycle_label']} — {r['attendance_file']} ({r['created_at']})"
+        report_map[label] = r["job_uuid"]
+
+    selected_report_label = st.selectbox(
+        "Select Report Batch to View & Download Generated Excel:",
+        options=list(report_map.keys()),
+        key=f"report_selector_{kp}"
     )
 
+    selected_uuid = report_map.get(selected_report_label)
+    if not selected_uuid:
+        return
+
+    # Fetch report detail
+    detail_cache_key = f"detail_{selected_uuid}"
+    if detail_cache_key not in st.session_state or st.session_state[detail_cache_key] is None:
+        with st.spinner("Loading generated Excel spreadsheet..."):
+            st.session_state[detail_cache_key] = fetch_report_detail(selected_uuid, st.session_state.token)
+
+    detail = st.session_state.get(detail_cache_key)
+    if not detail:
+        st.error("Failed to load details for the selected report.")
+        return
+
+    # Metadata Card
+    st.markdown(clean_html(f"""
+        <div class="glass-card" style="margin: 0.75rem 0 1rem 0; padding: 1rem 1.25rem; border-left: 4px solid #009bbd;">
+            <div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 0.5rem;">
+                <div>
+                    <div style="font-size: 1.1rem; font-weight: 700; color: #0f172a;">
+                        📄 Generated Attendance Workbook: {detail.get('attendance_filename', 'Attendance File')}
+                    </div>
+                    <div style="color: #64748b; font-size: 0.88rem; margin-top: 0.15rem;">
+                        Cycle: <strong>{detail.get('cycle_label', '—')}</strong> &nbsp;|&nbsp; 
+                        Employees: <strong>{detail.get('total_employees', 0):,}</strong> &nbsp;|&nbsp; 
+                        Dates: <strong>{detail.get('total_dates', 0)}</strong> &nbsp;|&nbsp; 
+                        Valid Punches: <strong>{detail.get('total_punches', 0):,} / {detail.get('total_possible', 0):,} ({detail.get('completion_rate', 0)}%)</strong>
+                    </div>
+                </div>
+            </div>
+        </div>
+    """), unsafe_allow_html=True)
+
+    # Action Toolbar: Download button + Search Box
+    col_dl_act, col_search = st.columns([3, 5])
+    with col_dl_act:
+        excel_bytes = download_report_excel_api(st.session_state.token, selected_uuid)
+        if excel_bytes:
+            filename = f"Updated_Attendance_{detail.get('attendance_filename', selected_uuid[:8]).replace('.xlsx', '').replace('.xlsm', '')}.xlsx"
+            st.download_button(
+                label="📥 Download Generated Excel (.xlsx)",
+                data=excel_bytes,
+                file_name=filename,
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                type="primary",
+                use_container_width=True,
+                key=f"dl_excel_btn_{selected_uuid}_{kp}"
+            )
+        else:
+            st.button("📥 Download Generated Excel (.xlsx)", disabled=True, use_container_width=True, key=f"dl_excel_dis_{selected_uuid}_{kp}")
+
+    with col_search:
+        search_filter = st.text_input(
+            "Search in Sheet",
+            placeholder="🔍 Search employee name or code in sheet...",
+            label_visibility="collapsed",
+            key=f"search_sheet_input_{selected_uuid}_{kp}"
+        )
+
+    # Display Mode Toggle
+    view_mode = st.radio(
+        "Display Mode:",
+        ["📊 Full Excel Grid (Date Columns)", "📋 Chronological Punch Records"],
+        horizontal=True,
+        key=f"view_mode_radio_{selected_uuid}_{kp}"
+    )
+
+    if view_mode == "📊 Full Excel Grid (Date Columns)":
+        grid_rows = detail.get("excel_grid_rows") or []
+        if search_filter:
+            sf_lower = search_filter.strip().lower()
+            grid_rows = [
+                r for r in grid_rows
+                if sf_lower in str(r.get("Employee Code", "")).lower() or sf_lower in str(r.get("Employee Name", "")).lower()
+            ]
+
+        if grid_rows:
+            st.dataframe(grid_rows, use_container_width=True, height=520)
+            st.caption(f"Showing {len(grid_rows)} employees across {len(detail.get('excel_date_columns', []))} date columns. You can scroll horizontally to view all daily punch-in times.")
+        else:
+            st.info("No matching employees found in this report.")
+
+    else:
+        # Chronological list view
+        daily_records = detail.get("employee_daily_records") or []
+        if search_filter:
+            sf_lower = search_filter.strip().lower()
+            daily_records = [
+                r for r in daily_records
+                if sf_lower in str(r.get("employee_code", "")).lower() or sf_lower in str(r.get("employee_name", "")).lower()
+            ]
+
+        if daily_records:
+            st.dataframe(daily_records, use_container_width=True, height=520)
+            st.caption(f"Showing {len(daily_records):,} daily attendance rows.")
+        else:
+            st.info("No matching records found in this report.")
+
+
+def render_reports():
+    st.session_state.active_tab = "upload"
+    render_upload()
+
+
+def render_employees():
+    refreshed = render_top_bar(
+        title="Employee Directory & Management",
+        subtitle="Manage employee profiles, register personnel, and maintain attendance master details.",
+        show_refresh=True,
+        refresh_key="refresh_emp_btn"
+    )
+
+    if refreshed or "employee_list" not in st.session_state or st.session_state.employee_list is None:
+        with st.spinner("Loading employee directory..."):
+            st.session_state.employee_list = fetch_employees(st.session_state.token)
+
+    employees = st.session_state.get("employee_list") or []
+
+    # KPI Statistics Row
+    total_emp = len(employees)
+    active_count = sum(1 for e in employees if e.get("is_active", True) is not False)
+    disabled_count = total_emp - active_count
+    unique_areas = sorted(list({e.get("area") for e in employees if e.get("area") and str(e.get("area")).strip()}))
+    unique_modes = sorted(list({e.get("attendance_mode") for e in employees if e.get("attendance_mode") and str(e.get("attendance_mode")).strip()}))
+
+    m1, m2, m3, m4 = st.columns(4)
+    with m1:
+        st.metric("Total Employees", f"{total_emp:,}")
+    with m2:
+        st.metric("Active Personnel", f"{active_count:,}")
+    with m3:
+        st.metric("Disabled Personnel", f"{disabled_count:,}")
+    with m4:
+        st.metric("Departments / Areas", len(unique_areas))
+
+    st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
+
+    # ── State Initializations ──
+    if "emp_show_add" not in st.session_state:
+        st.session_state.emp_show_add = False
+    if "emp_editing_id" not in st.session_state:
+        st.session_state.emp_editing_id = None
+    if "emp_disabling_id" not in st.session_state:
+        st.session_state.emp_disabling_id = None
+    if "emp_deleting_id" in st.session_state and st.session_state.emp_deleting_id is not None:
+        st.session_state.emp_disabling_id = st.session_state.emp_deleting_id
+        st.session_state.emp_deleting_id = None
+
+    # ── Disable Confirmation Card ──
+    if st.session_state.emp_disabling_id is not None:
+        dis_target = next((e for e in employees if e["id"] == st.session_state.emp_disabling_id), None)
+        if dis_target:
+            st.markdown(clean_html(f"""
+                <div class="glass-card" style="border-left: 4px solid #f59e0b; background: #fffbeb !important;">
+                    <div style="font-weight: 700; color: #b45309; font-size: 1.05rem; margin-bottom: 0.35rem;">
+                        ⚠️ Confirm Employee Deactivation
+                    </div>
+                    <div style="color: #475569; font-size: 0.95rem; margin-bottom: 0.85rem;">
+                        Are you sure you want to disable <strong>{dis_target['employee_name']}</strong> 
+                        (Employee Code: <code>{dis_target['employee_code']}</code>)? The employee will be marked as disabled and can be re-enabled at any time.
+                    </div>
+                </div>
+            """), unsafe_allow_html=True)
+            col_d1, col_d2, _ = st.columns([2, 2, 6])
+            with col_d1:
+                if st.button("🚫 Yes, Disable", type="primary", key="confirm_disable_btn", use_container_width=True):
+                    ok, msg = toggle_employee_status_api(st.session_state.token, dis_target["id"])
+                    if ok:
+                        st.session_state.emp_disabling_id = None
+                        st.session_state.employee_list = None
+                        st.toast(f"Employee {dis_target['employee_name']} disabled.", icon="🚫")
+                        st.rerun()
+                    else:
+                        st.error(msg)
+            with col_d2:
+                if st.button("Cancel", key="cancel_disable_btn", use_container_width=True):
+                    st.session_state.emp_disabling_id = None
+                    st.rerun()
+            st.markdown("<div style='margin-bottom: 1rem;'></div>", unsafe_allow_html=True)
+
+    # ── Edit Employee Form ──
+    if st.session_state.emp_editing_id is not None:
+        edit_target = next((e for e in employees if e["id"] == st.session_state.emp_editing_id), None)
+        if edit_target:
+            st.markdown(clean_html(f"""
+                <div class="glass-card" style="border-left: 4px solid #009bbd; margin-bottom: 1rem;">
+                    <div style="font-weight: 700; color: #0f172a; font-size: 1.1rem; margin-bottom: 0.2rem;">
+                        ✏️ Edit Employee Profile
+                    </div>
+                    <div style="color: #64748b; font-size: 0.88rem;">
+                        Updating details for {edit_target['employee_name']} (ID: {edit_target['id']})
+                    </div>
+                </div>
+            """), unsafe_allow_html=True)
+
+            with st.form("edit_employee_form"):
+                col_e1, col_e2 = st.columns(2)
+                with col_e1:
+                    edit_name = st.text_input("Employee Name *", value=edit_target["employee_name"], key="edit_name_inp")
+                    edit_code = st.text_input("Employee Code *", value=edit_target["employee_code"], key="edit_code_inp")
+                with col_e2:
+                    edit_area = st.text_input("Department / Area", value=edit_target.get("area") or "", placeholder="e.g. Computer Science, Administration", key="edit_area_inp")
+                    mode_options = ["Biometric", "RFID Card", "Face Recognition", "Mobile App", "Manual"]
+                    current_mode = edit_target.get("attendance_mode") or "Biometric"
+                    curr_idx = mode_options.index(current_mode) if current_mode in mode_options else 0
+                    edit_mode = st.selectbox("Attendance Mode", mode_options, index=curr_idx, key="edit_mode_inp")
+                    target_active = edit_target.get("is_active", True) is not False
+                    edit_status = st.selectbox("Account Status", ["Active", "Disabled"], index=0 if target_active else 1, key="edit_status_inp")
+
+                col_b1, col_b2, _ = st.columns([2, 2, 6])
+                with col_b1:
+                    save_edit_submitted = st.form_submit_button("💾 Save Changes", type="primary", use_container_width=True)
+                with col_b2:
+                    cancel_edit = st.form_submit_button("Cancel", use_container_width=True)
+
+                if save_edit_submitted:
+                    if not edit_name.strip():
+                        st.error("Employee Name cannot be empty.")
+                    elif not edit_code.strip():
+                        st.error("Employee Code cannot be empty.")
+                    else:
+                        ok, res = update_employee_api(
+                            st.session_state.token,
+                            edit_target["id"],
+                            employee_code=edit_code.strip(),
+                            employee_name=edit_name.strip(),
+                            area=edit_area.strip() if edit_area.strip() else None,
+                            attendance_mode=edit_mode,
+                            is_active=(edit_status == "Active")
+                        )
+                        if ok:
+                            st.session_state.emp_editing_id = None
+                            st.session_state.employee_list = None
+                            st.toast("Employee details updated successfully!", icon="✅")
+                            st.rerun()
+                        else:
+                            st.error(res)
+
+                if cancel_edit:
+                    st.session_state.emp_editing_id = None
+                    st.rerun()
+
+            st.markdown("<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True)
+
+    # ── Add Employee Panel ──
+    if st.session_state.emp_show_add:
+        st.markdown(clean_html("""
+            <div class="glass-card" style="border-left: 4px solid #10b981; margin-bottom: 1rem;">
+                <div style="font-weight: 700; color: #0f172a; font-size: 1.1rem; margin-bottom: 0.2rem;">
+                    ➕ Register New Employee
+                </div>
+                <div style="color: #64748b; font-size: 0.88rem;">
+                    Enter the employee's name and unique code to register them into the database.
+                </div>
+            </div>
+        """), unsafe_allow_html=True)
+
+        with st.form("add_employee_form", clear_on_submit=True):
+            col_a1, col_a2 = st.columns(2)
+            with col_a1:
+                new_name = st.text_input("Employee Name *", placeholder="e.g. Dr. Ramesh Kumar", key="add_name_inp")
+                new_code = st.text_input("Employee Code *", placeholder="e.g. EMP1042 or 1042", key="add_code_inp")
+            with col_a2:
+                new_area = st.text_input("Department / Area", placeholder="e.g. Computer Science, Administration", key="add_area_inp")
+                new_mode = st.selectbox("Attendance Mode", ["Biometric", "RFID Card", "Face Recognition", "Mobile App", "Manual"], index=0, key="add_mode_inp")
+
+            col_sub1, col_sub2, _ = st.columns([2, 2, 6])
+            with col_sub1:
+                add_submitted = st.form_submit_button("➕ Save Employee", type="primary", use_container_width=True)
+            with col_sub2:
+                add_cancelled = st.form_submit_button("Cancel", use_container_width=True)
+
+            if add_submitted:
+                if not new_name.strip():
+                    st.error("Please provide Employee Name.")
+                elif not new_code.strip():
+                    st.error("Please provide Employee Code.")
+                else:
+                    ok, res = create_employee_api(
+                        st.session_state.token,
+                        employee_code=new_code.strip(),
+                        employee_name=new_name.strip(),
+                        area=new_area.strip() if new_area.strip() else None,
+                        attendance_mode=new_mode
+                    )
+                    if ok:
+                        st.session_state.emp_show_add = False
+                        st.session_state.employee_list = None
+                        st.toast(f"Employee {new_name.strip()} added successfully!", icon="✅")
+                        st.rerun()
+                    else:
+                        st.error(res)
+
+            if add_cancelled:
+                st.session_state.emp_show_add = False
+                st.rerun()
+
+        st.markdown("<div style='margin-bottom: 1.5rem;'></div>", unsafe_allow_html=True)
+
+    # ── Search & Actions Bar ──
+    col_act, col_search, col_filter, col_status = st.columns([2.2, 3.8, 2.3, 1.7])
+    with col_act:
+        add_btn_label = "✖ Close Form" if st.session_state.emp_show_add else "➕ Add New Employee"
+        if st.button(add_btn_label, type="primary" if not st.session_state.emp_show_add else "secondary", key="toggle_add_btn", use_container_width=True):
+            st.session_state.emp_show_add = not st.session_state.emp_show_add
+            st.rerun()
+
+    with col_search:
+        search_query = st.text_input("🔍 Search employees", placeholder="Search by name or code...", label_visibility="collapsed", key="emp_search_box")
+
+    with col_filter:
+        filter_options = ["All Departments"] + unique_areas
+        selected_dept = st.selectbox("Department", filter_options, label_visibility="collapsed", key="emp_dept_filter")
+
+    with col_status:
+        selected_status = st.selectbox("Status", ["All Status", "Active", "Disabled"], label_visibility="collapsed", key="emp_status_filter")
+
+    # ── Filter Logic ──
+    filtered_emps = employees
+    if search_query:
+        q = search_query.strip().lower()
+        filtered_emps = [e for e in filtered_emps if q in e.get("employee_name", "").lower() or q in e.get("employee_code", "").lower()]
+    if selected_dept != "All Departments":
+        filtered_emps = [e for e in filtered_emps if e.get("area") == selected_dept]
+    if selected_status == "Active":
+        filtered_emps = [e for e in filtered_emps if e.get("is_active", True) is not False]
+    elif selected_status == "Disabled":
+        filtered_emps = [e for e in filtered_emps if e.get("is_active", True) is False]
+
+    st.markdown("<div style='margin-top: 0.5rem;'></div>", unsafe_allow_html=True)
+
+    # ── Directory Table & Operations ──
+    if not filtered_emps:
+        st.markdown(clean_html("""
+            <div class="glass-card" style="text-align: center; padding: 3rem 2rem; margin-top: 1rem;">
+                <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">👥</div>
+                <h3 style="color: #475569; margin-bottom: 0.5rem; font-size: 1.25rem;">No Employees Found</h3>
+                <p style="color: #64748b; font-size: 0.95rem; max-width: 480px; margin: 0 auto;">
+                    No employee records matched your search or department filter. Click <strong>Add New Employee</strong> to register personnel.
+                </p>
+            </div>
+        """), unsafe_allow_html=True)
+        return
+
+    # Count display & Export action
+    col_hdr, col_exp = st.columns([7, 3])
+    with col_hdr:
+        st.markdown(f"<div style='font-size: 0.95rem; font-weight: 600; color: #475569; padding-top: 0.5rem;'>Showing <strong>{len(filtered_emps)}</strong> of <strong>{total_emp}</strong> registered employees</div>", unsafe_allow_html=True)
+    with col_exp:
+        # Generate CSV download
+        import io, csv
+        csv_buffer = io.StringIO()
+        writer = csv.writer(csv_buffer)
+        writer.writerow(["ID", "Employee Code", "Employee Name", "Department/Area", "Attendance Mode", "Status", "Created At"])
+        for e in filtered_emps:
+            e_status = "Active" if e.get("is_active", True) is not False else "Disabled"
+            writer.writerow([e.get("id"), e.get("employee_code"), e.get("employee_name"), e.get("area") or "", e.get("attendance_mode") or "", e_status, e.get("created_at") or ""])
+        st.download_button(
+            label="📥 Export Directory (CSV)",
+            data=csv_buffer.getvalue(),
+            file_name="employees_directory.csv",
+            mime="text/csv",
+            use_container_width=True,
+            key="export_emp_csv"
+        )
+
+    st.markdown("<div style='margin-bottom: 0.5rem;'></div>", unsafe_allow_html=True)
+
+    # Table Header Row
+    th_col1, th_col2, th_col3, th_col4, th_col5, th_col6 = st.columns([1.5, 3.5, 2.5, 2, 1.2, 1.2])
+    with th_col1:
+        st.markdown("<div style='font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase;'>Code</div>", unsafe_allow_html=True)
+    with th_col2:
+        st.markdown("<div style='font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase;'>Name</div>", unsafe_allow_html=True)
+    with th_col3:
+        st.markdown("<div style='font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase;'>Department / Area</div>", unsafe_allow_html=True)
+    with th_col4:
+        st.markdown("<div style='font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase;'>Mode</div>", unsafe_allow_html=True)
+    with th_col5:
+        st.markdown("<div style='font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase; text-align: center;'>Edit</div>", unsafe_allow_html=True)
+    with th_col6:
+        st.markdown("<div style='font-size: 0.78rem; font-weight: 700; color: #64748b; text-transform: uppercase; text-align: center;'>Disable</div>", unsafe_allow_html=True)
+
+    st.markdown("<div style='border-bottom: 2px solid #e2e8f0; margin-bottom: 0.6rem;'></div>", unsafe_allow_html=True)
+
+    # Pagination
+    page_size = 50
+    total_pages = max(1, (len(filtered_emps) + page_size - 1) // page_size)
+    page = 1
+    if total_pages > 1:
+        page = st.number_input(f"Page (1 to {total_pages})", min_value=1, max_value=total_pages, value=1, step=1, key="emp_page_num")
+
+    start_idx = (page - 1) * page_size
+    end_idx = start_idx + page_size
+    page_emps = filtered_emps[start_idx:end_idx]
+
+    # Render each row
+    for emp in page_emps:
+        r_col1, r_col2, r_col3, r_col4, r_col5, r_col6 = st.columns([1.5, 3.5, 2.5, 2, 1.2, 1.2])
+        
+        emp_code = emp.get("employee_code", "—")
+        emp_name = emp.get("employee_name", "—")
+        emp_area = emp.get("area") or "—"
+        emp_mode = emp.get("attendance_mode") or "Biometric"
+        emp_id = emp["id"]
+        is_active = emp.get("is_active", True) is not False
+
+        with r_col1:
+            st.markdown(f"<div style='padding-top: 0.35rem;'><code>{emp_code}</code></div>", unsafe_allow_html=True)
+        with r_col2:
+            if is_active:
+                st.markdown(f"<div style='padding-top: 0.35rem; font-weight: 600; color: #0f172a;'>{emp_name}</div>", unsafe_allow_html=True)
+            else:
+                st.markdown(f"<div style='padding-top: 0.35rem; font-weight: 600; color: #94a3b8;'>{emp_name} <span style='display:inline-block; font-size:0.72rem; padding:1px 6px; border-radius:4px; background:#fee2e2; color:#b91c1c; margin-left:4px; font-weight:700;'>DISABLED</span></div>", unsafe_allow_html=True)
+        with r_col3:
+            st.markdown(f"<div style='padding-top: 0.35rem; color: #475569;'>{emp_area}</div>", unsafe_allow_html=True)
+        with r_col4:
+            st.markdown(f"<div style='padding-top: 0.35rem;'><span class='cycle-badge' style='padding: 0.15rem 0.5rem; font-size: 0.8rem;'>{emp_mode}</span></div>", unsafe_allow_html=True)
+        with r_col5:
+            if st.button("✏️", key=f"btn_edit_{emp_id}", help=f"Edit {emp_name}", use_container_width=True):
+                st.session_state.emp_editing_id = emp_id
+                st.session_state.emp_show_add = False
+                st.session_state.emp_disabling_id = None
+                st.rerun()
+        with r_col6:
+            if is_active:
+                if st.button("🚫", key=f"btn_dis_{emp_id}", help=f"Disable {emp_name}", use_container_width=True):
+                    st.session_state.emp_disabling_id = emp_id
+                    st.session_state.emp_editing_id = None
+                    st.session_state.emp_show_add = False
+                    st.rerun()
+            else:
+                if st.button("✅", key=f"btn_ena_{emp_id}", help=f"Enable {emp_name}", use_container_width=True):
+                    ok, msg = toggle_employee_status_api(st.session_state.token, emp_id)
+                    if ok:
+                        st.session_state.employee_list = None
+                        st.toast(f"Employee {emp_name} re-enabled!", icon="✅")
+                        st.rerun()
+                    else:
+                        st.error(msg)
+
+        st.markdown("<div style='border-bottom: 1px solid #f1f5f9; margin-bottom: 0.35rem;'></div>", unsafe_allow_html=True)
+
+
+def render_manual_punch():
+    """Render the Manual Punch-in page matching the application UI design and role constraints."""
+    refreshed = render_top_bar(
+        title="⏱️ Manual Punch-in",
+        subtitle="Manually record or update employee attendance punch-in times.",
+        show_refresh=True,
+        refresh_key="refresh_manual_punch_btn"
+    )
+
+    user_role = (st.session_state.get("role") or "").lower().replace("_", "-")
+    if user_role not in ("coordinator", "dean-faculty"):
+        st.markdown(clean_html("""
+            <div class="glass-card" style="border-left: 4px solid #ef4444; background: #fff5f5 !important; margin-top: 1rem;">
+                <div style="font-weight: 700; color: #b91c1c; font-size: 1.05rem; margin-bottom: 0.35rem;">
+                    🚫 Access Denied
+                </div>
+                <div style="color: #475569; font-size: 0.95rem;">
+                    Manual punch-in is strictly restricted to <strong>Coordinator</strong> and <strong>Dean-Faculty</strong> roles.
+                </div>
+            </div>
+        """), unsafe_allow_html=True)
+        return
+
+    # Load employees
+    if refreshed or "employee_list" not in st.session_state or st.session_state.employee_list is None:
+        with st.spinner("Loading employee list..."):
+            st.session_state.employee_list = fetch_employees(st.session_state.token)
+
+    employees = st.session_state.get("employee_list") or []
+
+    if not employees:
+        st.markdown(clean_html("""
+            <div class="glass-card" style="border-left: 4px solid #f59e0b; background: #fffbeb !important; margin-top: 1rem;">
+                <div style="font-weight: 700; color: #b45309; font-size: 1.05rem; margin-bottom: 0.35rem;">
+                    ⚠️ No Employees Available
+                </div>
+                <div style="color: #475569; font-size: 0.95rem;">
+                    No registered employees found in the master records. Please register employees in the <strong>Employees</strong> section or upload an attendance sheet first.
+                </div>
+            </div>
+        """), unsafe_allow_html=True)
+        return
+
+    # Prepare searchable employee options: Employee Name (Code) - Area (active only)
+    emp_options = {}
+    emp_display_list = []
+    for emp in employees:
+        if emp.get("is_active", True) is False:
+            continue
+        code = emp.get("employee_code", "")
+        name = emp.get("employee_name", "")
+        area = emp.get("area", "")
+        display = f"{name} ({code})" + (f" — {area}" if area else "")
+        emp_options[display] = emp
+        emp_display_list.append(display)
+
+    # Clean Card Header
+    st.markdown(clean_html("""
+        <div class="glass-card" style="margin-bottom: 1.25rem;">
+            <div style="font-weight: 700; color: #0f172a; font-size: 1.15rem; margin-bottom: 0.25rem;">
+                ✍️ Record Attendance Punch-in
+            </div>
+            <div style="color: #64748b; font-size: 0.88rem;">
+                Select an employee, punch-in date, and punch-in time. If a punch-in record already exists for the selected date, it will be safely updated without creating duplicate entries.
+            </div>
+        </div>
+    """), unsafe_allow_html=True)
+
+    # Input Fields in 3 responsive columns
+    col_emp, col_date, col_time = st.columns([4.5, 3, 2.5])
+
+    with col_emp:
+        st.markdown("<label style='font-size: 0.9rem; font-weight: 600; color: #1e293b; display: block; margin-bottom: 6px;'>Employee *</label>", unsafe_allow_html=True)
+        selected_display = st.selectbox(
+            "Employee",
+            options=emp_display_list,
+            index=0,
+            label_visibility="collapsed",
+            key="manual_punch_emp_select"
+        )
+        selected_emp = emp_options.get(selected_display) if selected_display else None
+        selected_code = selected_emp["employee_code"] if selected_emp else None
+
+    with col_date:
+        st.markdown("<label style='font-size: 0.9rem; font-weight: 600; color: #1e293b; display: block; margin-bottom: 6px;'>Punch-in Date *</label>", unsafe_allow_html=True)
+        selected_date = st.date_input(
+            "Punch-in Date",
+            value=date.today(),
+            label_visibility="collapsed",
+            key="manual_punch_date_picker"
+        )
+
+    now_clean = datetime.now().time().replace(second=0, microsecond=0)
+    with col_time:
+        st.markdown("<label style='font-size: 0.9rem; font-weight: 600; color: #1e293b; display: block; margin-bottom: 6px;'>Punch-in Time *</label>", unsafe_allow_html=True)
+        selected_time = st.time_input(
+            "Punch-in Time",
+            value=now_clean,
+            step=60,
+            label_visibility="collapsed",
+            key="manual_punch_time_picker"
+        )
+
+    selected_time_clean = selected_time.replace(second=0, microsecond=0) if selected_time else now_clean
+    formatted_time_str = selected_time_clean.strftime("%H:%M:00")
+    selected_hm = selected_time_clean.strftime("%H:%M")
+
+    # Real-time duplicate attendance check & indicator
+    if selected_code and selected_date:
+        has_record, check_data = check_existing_punch_api(st.session_state.token, selected_code, selected_date)
+        if has_record and check_data and check_data.get("exists"):
+            fp = check_data.get("first_punch") or "—"
+            st_val = check_data.get("status") or "ABSENT"
+            existing_hm = fp[:5] if len(fp) >= 5 else fp
+
+            # Check if user's selected punch-in time matches existing punch-in time
+            is_same_punch_time = bool(existing_hm and selected_hm == existing_hm)
+
+            if is_same_punch_time:
+                # Punch-in time is not changed
+                st.markdown(clean_html(f"""
+                    <div class="glass-card" style="border-left: 4px solid #f59e0b; background: #fffbeb !important; margin: 0.85rem 0; padding: 0.85rem 1.15rem;">
+                        <div style="font-weight: 600; color: #b45309; font-size: 0.92rem; margin-bottom: 0.25rem;">
+                            ℹ️ Punch-in Time Unchanged
+                        </div>
+                        <div style="color: #475569; font-size: 0.88rem; line-height: 1.5;">
+                            Employee <strong>{selected_emp['employee_name']}</strong> (<code>{selected_code}</code>) already has a punch-in recorded at <strong>{fp}</strong> on <strong>{selected_date.strftime('%d-%b-%Y')}</strong>:
+                            <span style="display: inline-block; margin-left: 6px; padding: 2px 8px; border-radius: 4px; background: #fde68a; color: #92400e; font-weight: 600;">Status: {st_val}</span>
+                            <br/>The selected time ({selected_hm}) is already recorded for this date.
+                        </div>
+                    </div>
+                """), unsafe_allow_html=True)
+            else:
+                # User selected a DIFFERENT punch-in time: show clean update notice without alarming duplicate warning
+                st.markdown(clean_html(f"""
+                    <div class="glass-card" style="border-left: 4px solid #009bbd; background: #f0f9ff !important; margin: 0.85rem 0; padding: 0.85rem 1.15rem;">
+                        <div style="font-weight: 600; color: #0369a1; font-size: 0.92rem; margin-bottom: 0.25rem;">
+                            ✏️ Update Punch-in Time
+                        </div>
+                        <div style="color: #475569; font-size: 0.88rem; line-height: 1.5;">
+                            Employee <strong>{selected_emp['employee_name']}</strong> (<code>{selected_code}</code>) has existing punch: <strong>{fp}</strong> on {selected_date.strftime('%d-%b-%Y')}.
+                            <br/>Submitting will update the punch-in time to <strong>{selected_hm}:00</strong>.
+                        </div>
+                    </div>
+                """), unsafe_allow_html=True)
+        else:
+            st.markdown(clean_html(f"""
+                <div class="glass-card" style="border-left: 4px solid #10b981; background: #f0fdf4 !important; margin: 0.85rem 0; padding: 0.85rem 1.15rem;">
+                    <div style="font-weight: 600; color: #047857; font-size: 0.92rem; margin-bottom: 0.2rem;">
+                        ✨ Ready to Punch In
+                    </div>
+                    <div style="color: #475569; font-size: 0.88rem;">
+                        No prior punch-in found for <strong>{selected_emp['employee_name']}</strong> on {selected_date.strftime('%d-%b-%Y')}.
+                        Submitting will create a new attendance record marked <strong>PRESENT</strong> at <strong>{selected_hm}:00</strong>.
+                    </div>
+                </div>
+            """), unsafe_allow_html=True)
+
+    st.markdown("<div style='margin-bottom: 0.85rem;'></div>", unsafe_allow_html=True)
+
+    # Submit Button
+    col_btn, col_rest = st.columns([3, 7])
+    with col_btn:
+        submit_clicked = st.button(
+            "Add Punch-in",
+            type="primary",
+            use_container_width=True,
+            key="btn_add_manual_punch"
+        )
+
+    if submit_clicked:
+        if not selected_code:
+            st.error("Please select a valid employee.")
+            return
+        if not selected_date:
+            st.error("Please select a valid punch-in date.")
+            return
+        if not selected_time:
+            st.error("Please select a valid punch-in time.")
+            return
+
+        with st.spinner("Submitting manual punch-in..."):
+            ok, result = manual_punch_in_api(
+                token=st.session_state.token,
+                employee_code=selected_code,
+                punch_date=selected_date,
+                punch_time=formatted_time_str
+            )
+
+        if ok:
+            msg = result.get("message", "Manual punch-in added successfully")
+            rec = result.get("record") or {}
+            action_type = result.get("action", "created")
+
+            st.toast(msg, icon="✅")
+            st.markdown(clean_html(f"""
+                <div class="glass-card" style="border-left: 4px solid #10b981; background: #f0fdf4 !important; margin-top: 1rem;">
+                    <div style="font-weight: 700; color: #047857; font-size: 1.1rem; margin-bottom: 0.4rem;">
+                        ✅ {msg}
+                    </div>
+                    <div style="color: #334155; font-size: 0.92rem; line-height: 1.7;">
+                        <strong>Employee:</strong> {rec.get('employee_name', selected_emp['employee_name'])} (<code>{rec.get('employee_code', selected_code)}</code>)<br/>
+                        <strong>Date:</strong> {rec.get('date', str(selected_date))}<br/>
+                        <strong>Punch-in Time:</strong> <code style="font-weight: 700; color: #0284c7; font-size: 0.95rem;">{rec.get('punch_in_time', formatted_time_str)}</code><br/>
+                        <strong>Status:</strong> <span style="padding: 2px 8px; border-radius: 4px; background: #dcfce7; color: #166534; font-weight: 600;">{rec.get('status', 'PRESENT')}</span><br/>
+                        <strong>Operation:</strong> {action_type.capitalize()}
+                    </div>
+                </div>
+            """), unsafe_allow_html=True)
+        else:
+            st.error(f"Failed to record punch-in: {result}")
+
+
+def handle_logout_query_param():
+    """Handle instant logout triggered from the top navbar link."""
+    try:
+        if st.query_params.get("action") in ["logout", ["logout"]]:
+            st.query_params.clear()
+            st.session_state.clear()
+            st.rerun()
+    except AttributeError:
+        try:
+            if st.experimental_get_query_params().get("action") in ["logout", ["logout"]]:
+                st.experimental_set_query_params()
+                st.session_state.clear()
+                st.rerun()
+        except Exception:
+            pass
+
+
 def main():
+    handle_logout_query_param()
     inject_custom_css(login_page=not bool(st.session_state.token))
 
     if not st.session_state.token:
         render_login()
         return
 
-    render_navbar()
+    # Always render sidebar (it renders full 250px or mini 68px icon dock depending on session state)
+    render_sidebar()
 
     # Render selected page tab
     if st.session_state.active_tab == "dashboard":
         render_dashboard()
+    elif st.session_state.active_tab == "employees":
+        render_employees()
     elif st.session_state.active_tab == "upload":
         render_upload()
-    elif st.session_state.active_tab == "report":
-        render_reports()
+    elif st.session_state.active_tab in ("report", "reports"):
+        st.session_state.active_tab = "upload"
+        render_upload()
+    elif st.session_state.active_tab == "manual_punch":
+        render_manual_punch()
 
 if __name__ == "__main__":
     main()

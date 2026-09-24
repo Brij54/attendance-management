@@ -1,0 +1,133 @@
+version: "3.9"
+
+services:
+
+  # ═══════════════════════════════════════════════════════════════
+  #  DATABASE SERVICE (PostgreSQL)
+  #  - Isolated on internal db-net (no public ports exposed)
+  #  - Storage mapped to /opt/production/data/faculty/postgres
+  # ═══════════════════════════════════════════════════════════════
+
+  attendance-postgres:
+    image: postgres:16-alpine
+    container_name: attendance-prod-postgres
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    env_file: .env.production
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-faculty_admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-faculty_attendance_db}
+    volumes:
+      - /opt/production/data/faculty/postgres:/var/lib/postgresql/data
+    networks:
+      db-net:
+        aliases:
+          - attendance-postgres
+          - attendance-prod-postgres
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-faculty_admin} -d ${POSTGRES_DB:-faculty_attendance_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+          cpus: "1.0"
+        reservations:
+          memory: 256M
+
+
+  # ═══════════════════════════════════════════════════════════════
+  #  BACKEND SERVICE (FastAPI REST API)
+  #  - Domain: apifaculty-report.iiitb.net (via Nginx Proxy Manager)
+  #  - Internal Port: 8000
+  # ═══════════════════════════════════════════════════════════════
+
+  attendance-backend:
+    image: 172.16.202.56:5000/faculty-backend:latest
+    container_name: attendance-backend
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    env_file: .env.production
+    depends_on:
+      attendance-postgres:
+        condition: service_healthy
+    networks:
+      db-net:
+        aliases:
+          - attendance-backend
+          - attendance-prod-backend
+      proxy:
+        aliases:
+          - attendance-backend
+          - attendance-prod-backend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+          cpus: "1.5"
+        reservations:
+          memory: 512M
+
+
+  # ═══════════════════════════════════════════════════════════════
+  #  FRONTEND SERVICE (Streamlit Web Portal)
+  #  - Domain: faculty-report.iiitb.net (via Nginx Proxy Manager)
+  #  - Internal Port: 80 (WebSockets enabled in NPM)
+  # ═══════════════════════════════════════════════════════════════
+
+  attendance-frontend:
+    image: 172.16.202.56:5000/faculty-frontend:latest
+    container_name: attendance-frontend
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    env_file: .env.production
+    depends_on:
+      attendance-backend:
+        condition: service_healthy
+    networks:
+      db-net:
+        aliases:
+          - attendance-frontend
+          - attendance-prod-frontend
+      proxy:
+        aliases:
+          - attendance-frontend
+          - attendance-prod-frontend
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:80/_stcore/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 2048M
+          cpus: "1.5"
+        reservations:
+          memory: 512M
+
+
+# ═══════════════════════════════════════════════════════════════
+#  NETWORKS
+#  - db-net: Internal network for secure backend-DB communication
+#  - proxy: External network used by Nginx Proxy Manager
+# ═══════════════════════════════════════════════════════════════
+networks:
+  db-net:
+    external: true
+
+  proxy:
+    external: true

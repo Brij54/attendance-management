@@ -3,6 +3,8 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parents[2]
+load_dotenv(BASE_DIR / ".env.production")
+load_dotenv(Path(__file__).resolve().parents[1] / ".env.production")
 load_dotenv(BASE_DIR / ".env")
 load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 load_dotenv()

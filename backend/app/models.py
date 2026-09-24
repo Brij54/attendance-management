@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, Integer, String, Float, DateTime, Date, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, Float, DateTime, Date, ForeignKey, Text, Boolean
 from sqlalchemy.orm import relationship
 from .database import Base
 
@@ -20,6 +20,7 @@ class Employee(Base):
     employee_name = Column(String(150), nullable=False)
     area = Column(String(100), nullable=True)
     attendance_mode = Column(String(50), nullable=True)
+    is_active = Column(Boolean, default=True, nullable=False)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 class SwipeLog(Base):

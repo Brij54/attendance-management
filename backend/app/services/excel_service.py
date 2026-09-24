@@ -3,6 +3,7 @@ from datetime import date,datetime
 from copy import copy
 import msoffcrypto
 from openpyxl import load_workbook
+from openpyxl.styles import PatternFill
 from openpyxl.utils import get_column_letter
 
 def norm(v):
@@ -120,6 +121,8 @@ def update_attendance(path,password,data,outpath):
                     title_merged_ranges.append((rng.min_row, rng.max_row, rng.min_col, rng.max_col))
                     ws.unmerge_cells(range_string=str(rng))
 
+        absent_fill = PatternFill(start_color="E5B80B", end_color="E5B80B", fill_type="solid")
+
         for c,d in reversed(dates):
             ws.insert_cols(c+1,1);pc=c+1
             src=ws.cell(hr,c);dst=ws.cell(hr,pc)
@@ -137,9 +140,15 @@ def update_attendance(path,password,data,outpath):
                 s=ws.cell(r,c);x=ws.cell(r,pc)
                 if s.has_style:
                     x.font=copy(s.font);x.fill=copy(s.fill);x.border=copy(s.border);x.alignment=copy(s.alignment);x.protection=copy(s.protection)
-                code=norm(ws.cell(r,cc).value);dt=data.get(code,{}).get(d)
+                code=norm(ws.cell(r,cc).value)
+                if not code:
+                    continue
+                dt=data.get(code,{}).get(d)
                 x.value=dt
-                if dt:x.number_format="dd/mm/yyyy hh:mm:ss"
+                if dt:
+                    x.number_format="dd/mm/yyyy hh:mm:ss"
+                else:
+                    x.fill=absent_fill
 
         # Re-merge title banners across full expanded width
         num_inserted = len(dates)
