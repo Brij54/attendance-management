@@ -40,7 +40,6 @@ class EmployeeResponse(EmployeeBase):
 
     class Config:
         from_attributes = True
-        orm_mode = True
 
 class ManualPunchInRequest(BaseModel):
     employee_code: str = Field(..., alias="employeeCode", min_length=1, description="Employee code")
